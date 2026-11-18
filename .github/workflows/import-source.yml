@@ -1,0 +1,26 @@
+name: Unpack initial project source
+on:
+  push:
+    paths:
+      - .bootstrap/source.tar.xz.b64
+permissions:
+  contents: write
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Extract project files
+        shell: bash
+        run: |
+          base64 -d .bootstrap/source.tar.xz.b64 | tar -xJf -
+          test -f pyproject.toml
+          test -f src/bpf_postprocess/importers/pmf_binary.py
+          rm -rf .bootstrap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Import modular BioPharma Finder v0.1.0 project"
+          git push
