@@ -1,0 +1,22 @@
+# Запуск проекта в Windows / VS Code
+
+1. Скачайте ZIP проекта и распакуйте его в отдельную папку (не в папку данных прибора).
+2. Откройте папку проекта в VS Code.
+3. В терминале PowerShell выполните:
+
+```powershell
+& "$env:LOCALAPPDATA\Programs\Python\Python313\python.exe" -m venv .venv
+& ".\.venv\Scripts\python.exe" -m pip install -e ".[test]"
+& ".\.venv\Scripts\python.exe" -m streamlit run "src\bpf_postprocess\ui\app.py"
+```
+
+Если Python установлен в другом месте, замените путь в первой команде.
+Браузер откроет `http://localhost:8501`.
+
+**Загрузка данных**: можно выбрать несколько CSV, `.resultsbpf` или компактных PMF ZIP. Один файл BF может содержать несколько RAW-запусков: они будут показаны по отдельности. Не загружайте CSV и `.resultsbpf` одного эксперимента одновременно, иначе будут дубли.
+
+**Редактирование групп**: в разделе `Experiments and RAW run labels` вручную установите правильные sample IDs, `Reduced`/`Non-reduced` и реплики. Из названия с `DTT` программа предполагает Reduced, а остальные помечает Unspecified.
+
+**Важное ограничение**: прямой PMF reader экспериментальный, проверен лишь на одном эксперименте версии BF 5.0.68.8. При новом формате сначала сверяйте с исходным CSV из BF.
+
+**Репозиторий GitHub:** исходный код опубликован в `AlexanderMoysa/biopharma-finder-postprocessing`. Установка и запуск описаны выше.

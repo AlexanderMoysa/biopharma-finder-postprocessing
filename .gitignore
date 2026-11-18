@@ -1,0 +1,24 @@
+# Instrument and experiment data: never commit to the repo
+*.raw
+*.RAW
+*.resultsbpf
+*.pmf
+*.csv
+*.zip
+*_core_for_analysis.zip
+*_all_components.csv
+*_metadata.json
+*_validation_report.txt
+/data/
+/outputs/
+/.streamlit/secrets.toml
+# Python environments
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.DS_Store
