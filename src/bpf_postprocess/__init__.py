@@ -1,2 +1,2 @@
 """Thermo BioPharma Finder peptide mapping post-processing."""
-__version__ = "0.1.0"
+__version__ = "0.2.0"

@@ -25,3 +25,16 @@
 - Automated integration fixtures with anonymized licensed test files
 - Persisted sessions/projects, reusable metadata mapping, reproducibility manifests
 - User permissions and lab deployment options
+
+
+## Version 0.2.0 implemented
+
+- PMF text-derived sequence/Mod/positions with safeguards against claiming unknown disulfide sites.
+- Confidence filtering, manual component selection, more table exports.
+- Multi-RAW reference comparison, heatmap, sample/group replicate statistics, exploratory modification-area fractions.
+
+## Next
+
+- Validate native PMF site-level annotations on additional proteins and BF versions.
+- More controlled peptide/modification grouping and more explicit replicate QC.
+- Add independently validated sequence coverage and aligned unidentified-feature analysis.

@@ -8,12 +8,12 @@ from pathlib import Path
 import pandas as pd
 
 COLS = [
-    "experiment", "sample", "raw_file", "condition", "preparation",
+    "experiment", "sample", "sample_group", "raw_file", "condition", "preparation",
     "replicate", "component_no", "identified", "identification",
     "peptide_sequence", "modification", "site", "positions", "protein",
     "rt_min", "mz", "charge", "mono_mass_da", "ms_area",
     "confidence_pct", "delta_ppm", "id_type", "integration_type",
-    "source_file", "source_type", "import_note",
+    "source_file", "source_type", "annotation_origin", "import_note",
 ]
 NUMERIC_COLS = ["component_no", "rt_min", "mz", "charge", "mono_mass_da", "ms_area", "confidence_pct", "delta_ppm"]
 
@@ -54,7 +54,7 @@ def guess_preparation(raw_file: str) -> str:
 
 
 def make_runs(df: pd.DataFrame) -> pd.DataFrame:
-    cols = ["experiment", "sample", "raw_file", "condition", "preparation", "replicate", "source_file", "source_type"]
+    cols = ["experiment", "sample", "sample_group", "raw_file", "condition", "preparation", "replicate", "source_file", "source_type"]
     if df.empty:
         return pd.DataFrame(columns=cols + ["components", "identified_components"])
     grouped = df.groupby(cols, dropna=False, sort=False).agg(

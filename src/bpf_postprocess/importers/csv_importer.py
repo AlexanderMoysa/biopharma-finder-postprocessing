@@ -42,7 +42,7 @@ def read_csv(source: str | Path | bytes, name: str | None = None) -> tuple[pd.Da
         for raw in area_names:
             ident = (rec.get("Identification") or "").strip()
             data = {
-                "experiment": experiment, "sample": sample, "raw_file": raw,
+                "experiment": experiment, "sample": sample, "sample_group": "", "raw_file": raw,
                 "condition": "", "preparation": guess_preparation(raw), "replicate": "",
                 "component_no": rec.get("No."), "identified": bool(ident),
                 "identification": ident, "peptide_sequence": rec.get("Peptide Sequence") or "",
@@ -57,7 +57,7 @@ def read_csv(source: str | Path | bytes, name: str | None = None) -> tuple[pd.Da
                 "delta_ppm": rec.get("∆ ppm:" + raw) or rec.get("∆ ppm"),
                 "id_type": rec.get("ID Type:" + raw) or rec.get("ID Type"),
                 "integration_type": rec.get("Integration Type"),
-                "source_file": source_name, "source_type": "csv", "import_note": "",
+                "source_file": source_name, "source_type": "csv", "annotation_origin": "bf_csv", "import_note": "",
             }
             rows.append(data)
     if not rows:

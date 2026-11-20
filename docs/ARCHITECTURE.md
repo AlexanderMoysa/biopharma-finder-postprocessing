@@ -52,3 +52,6 @@ The PMF format is undocumented and reader offsets/markers are empirically derive
 - Matching unidentified components by validated mass + RT tolerances
 - PDF reports and reproducible provenance manifests
 - Native PMF support for further versions / method types
+
+
+v0.2.0 processing modules: `selection.py`, `multisample.py`, `relative_modifications.py`; importer annotation reconstruction lives in `importers/annotation_parser.py`. All analyses operate on the selected normalized component dataframe. PMF-derived annotation fields have `annotation_origin=pmf_id_derived_partial`. No code may infer disulfide connectivity from peptide IDs alone.

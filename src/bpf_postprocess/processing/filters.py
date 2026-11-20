@@ -7,7 +7,7 @@ def filter_components(
     frame: pd.DataFrame, *, samples: list[str] | None = None,
     raw_files: list[str] | None = None, preparations: list[str] | None = None,
     identified: str = "All", peptide_query: str = "", modification_query: str = "",
-    min_area: float = 0,
+    min_area: float = 0, min_confidence_pct: float = 0,
 ) -> pd.DataFrame:
     data = frame
     if samples is not None:
@@ -34,6 +34,9 @@ def filter_components(
             data["identification"].str.contains(query, case=False, regex=False, na=False)
         )
         data = data[found]
+    if min_confidence_pct > 0:
+        # NaN (unidentified/missing) never passes a positive confidence filter.
+        data = data[data["confidence_pct"] >= min_confidence_pct]
     if min_area > 0:
         data = data[data["ms_area"] >= min_area]
     return data.copy()
