@@ -19,6 +19,10 @@ from bpf_postprocess.processing.filters import filter_components
 from bpf_postprocess.processing.selection import component_keys, selected_rows, update_exclusions
 from bpf_postprocess.processing.comparison import compare_runs, long_peptide_areas
 from bpf_postprocess.processing.multisample import reference_comparison, replicate_statistics
+from bpf_postprocess.processing.detailed_comparison import (
+    run_catalog, compatible_run_ids, select_comparison_runs,
+    annotated_area_matrix, detailed_reference_comparison, detailed_component_records,
+)
 from bpf_postprocess.processing.modifications import modification_areas
 from bpf_postprocess.processing.relative_modifications import DEFAULT_PTMS, modification_fractions
 from bpf_postprocess.processing.unidentified import unidentified_summary
@@ -70,6 +74,7 @@ with st.expander("Import experiments", expanded="dataset" not in st.session_stat
                 ]].copy().fillna("")
                 st.session_state["excluded_component_keys"]=set()
                 st.session_state["select_version"]=0
+                st.session_state["comparison_session_epoch"] = st.session_state.get("comparison_session_epoch",0)+1
                 st.success(f"Imported {len(dataset.experiments)} experiment(s), {len(dataset.runs)} RAW run(s)")
             except Exception as exc:
                 st.error(f"Import failed: {exc}")
@@ -179,8 +184,64 @@ with st.expander("Download Component Explorer tables",expanded=True):
     downloads(filtered,"component_explorer_visible",title="Visible components")
     downloads(selected,"component_explorer_selected",title="Selected components")
 
+# Comparison-specific RAW selection never changes the explorer or PTM filters.
+# In particular, reduced and non-reduced runs must not share an area comparison.
+comparison_catalog = run_catalog(selected)
+comparison_reference = None
+comparison_targets = []
+comparison_data = selected.iloc[0:0].copy()
+comparison_matrix = pd.DataFrame(columns=["feature"])
+comparison_wide = pd.DataFrame(columns=["feature", "peptide_sequence", "modification", "site", "positions", "protein"])
+comparison_details = pd.DataFrame()
+comparison_summary = pd.DataFrame()
+comparison_areas = pd.DataFrame()
+
+with st.expander("3 · Choose RAW files for peptide comparison", expanded=True):
+    st.write("Select **one reference RAW** and any number of **comparison RAW files**. "
+             "Only runs with the same preparation are eligible. "
+             "This selection controls the two comparison tabs and their exports, "
+             "without removing runs from Component Explorer or Modification Analysis.")
+    if comparison_catalog.empty:
+        st.info("No selected components are available. Check your filters or component selection.")
+    else:
+        run_options = comparison_catalog["run"].tolist()
+        comparison_reference = st.selectbox("Reference RAW run", run_options, key="comparison_reference_run")
+        ref_prep = comparison_catalog.loc[
+            comparison_catalog["run"] == comparison_reference, "preparation"
+        ].iloc[0]
+        possible_comparisons = compatible_run_ids(comparison_catalog, comparison_reference)
+        # Key depends on reference/available runs; switching the reference resets
+        # the picker rather than keeping stale, incompatible RAW selections.
+        picker_signature = hashlib.sha1((
+            str(st.session_state.get("comparison_session_epoch", 0)) + "|" +
+            comparison_reference + "|" + "|".join(possible_comparisons)
+        ).encode()).hexdigest()[:12]
+        comparison_targets = st.multiselect(
+            "Comparison RAW runs (select or deselect manually)",
+            options=possible_comparisons, default=possible_comparisons,
+            key=f"comparison_targets_{picker_signature}",
+        )
+        st.caption(f"Reference preparation: **{ref_prep}**. "
+                   "Only RAW files with exactly this preparation are shown in the comparator picker.")
+        if ref_prep == "Unspecified":
+            st.warning("Reference preparation is Unspecified. Assign Reduced or Non-reduced "
+                       "in section 1 to reliably avoid comparing different preparation types.")
+        if not comparison_targets:
+            st.info("Choose at least one comparison RAW file for fold-change tables and heatmaps.")
+        selected_run_ids = [comparison_reference, *comparison_targets]
+        st.dataframe(comparison_catalog.loc[comparison_catalog["run"].isin(selected_run_ids)],
+                     width="stretch", hide_index=True)
+        comparison_data = select_comparison_runs(selected, comparison_reference, comparison_targets)
+        comparison_matrix = compare_runs(comparison_data, run_ids=selected_run_ids)
+        if not comparison_matrix.empty:
+            existing_columns = [c for c in selected_run_ids if c in comparison_matrix.columns]
+            comparison_matrix = comparison_matrix[["feature", *existing_columns]]
+        comparison_wide = annotated_area_matrix(selected, comparison_reference, comparison_targets)
+        comparison_details = detailed_component_records(selected, comparison_reference, comparison_targets)
+        comparison_summary = detailed_reference_comparison(selected, comparison_reference, comparison_targets)
+        comparison_areas = long_peptide_areas(comparison_data)
+
 areas=long_peptide_areas(selected)
-matrix=compare_runs(selected)
 mods=modification_areas(selected)
 unknown=unidentified_summary(selected)
 
@@ -188,72 +249,91 @@ peptide_tab,comparison_tab,mod_tab,unknown_tab,report_tab=st.tabs([
     "Peptide comparison","Multi-sample & replicates","Modifications","Unidentified","Export report"
 ])
 with peptide_tab:
-    st.write("Integrated MS areas, grouped by full BioPharma Finder identification. "
-             "No normalization or occupancy inference; multiple components with the same ID are summed per run.")
-    st.dataframe(matrix,width="stretch",hide_index=True,height=320)
-    downloads(matrix,"peptide_comparison",title="Peptide matrix")
-    if not areas.empty:
-        features=sorted(areas["feature"].dropna().unique().tolist())
-        feature=st.selectbox("Peptide / identification",features)
-        plot_data=areas[areas["feature"]==feature]
-        fig=px.bar(plot_data,x="raw_file",y="ms_area",color="sample",
-                   hover_data=["experiment","preparation","component_count"],title=feature,
-                   labels={"ms_area":"MS Area","raw_file":"RAW run"})
-        st.plotly_chart(fig,width="stretch")
-        downloads(plot_data,"selected_peptide_areas")
-        st.download_button("⬇ Figure PNG",static_bar_figure_bytes(plot_data,feature,"png"),"peptide_comparison.png","image/png")
-        st.download_button("⬇ Figure SVG",static_bar_figure_bytes(plot_data,feature,"svg"),"peptide_comparison.svg","image/svg+xml")
-        st.download_button("⬇ Interactive HTML",fig.to_html(include_plotlyjs=True).encode("utf-8"),
-                           "peptide_comparison.html","text/html")
+    st.write("**Only your chosen RAW runs** are shown below. Rows are matched using the full "
+             "BF peptide identification. MS areas are summed for duplicate components/charge "
+             "states; displayed RT is from the largest-area component per run. "
+             "All individual RT, m/z and charge measurements are preserved in the detailed table.")
+    if comparison_wide.empty:
+        st.info("No identified peptides in the selected RAW runs.")
+    else:
+        st.dataframe(comparison_wide, width="stretch", hide_index=True, height=370)
+    downloads(comparison_wide, "comparison_annotated_matrix", title="Annotated comparison")
+    st.write("**Every individual identified component**, including RT, sequence, "
+             "modification, site, confidence, charge, m/z and source run.")
+    st.dataframe(comparison_details, width="stretch", hide_index=True, height=320)
+    downloads(comparison_details, "comparison_all_peptide_components", title="Individual components")
+    if not comparison_areas.empty:
+        features = sorted(comparison_areas["feature"].dropna().unique().tolist())
+        feature = st.selectbox("Peptide / identification to plot", features)
+        plot_data = comparison_areas.loc[comparison_areas["feature"] == feature].copy()
+        fig = px.bar(plot_data, x="raw_file", y="ms_area", color="sample",
+                     hover_data=["experiment", "preparation", "component_count"],
+                     title=feature, labels={"ms_area": "MS Area", "raw_file": "RAW run"})
+        st.plotly_chart(fig, width="stretch")
+        downloads(plot_data, "selected_peptide_areas")
+        st.download_button("⬇ Figure PNG", static_bar_figure_bytes(plot_data, feature, "png"),
+                           "peptide_comparison.png", "image/png")
+        st.download_button("⬇ Figure SVG", static_bar_figure_bytes(plot_data, feature, "svg"),
+                           "peptide_comparison.svg", "image/svg+xml")
+        st.download_button("⬇ Interactive HTML", fig.to_html(include_plotlyjs=True).encode("utf-8"),
+                           "peptide_comparison.html", "text/html")
 
 with comparison_tab:
-    st.write("Compare **all** selected RAW runs against one reference, plus replicate mean / SD / RSD%. "
-             "Compare like-for-like preparations. Raw MS area differences are not concentration changes.")
-    columns=[c for c in matrix.columns if c!="feature"]
-    if len(columns)>=2:
-        ref=st.selectbox("Reference RAW run",columns)
-        ref_table=reference_comparison(selected,ref)
-        st.dataframe(ref_table,width="stretch",hide_index=True,height=300)
-        downloads(ref_table,"all_vs_reference",title="All vs reference")
+    st.write("**Reference and comparison RAW files are selected in section 3 above.** "
+             "The table includes peptide sequence, modification, site, positions, protein, "
+             "reference/comparison areas, RT, m/z, charge, confidence and fold change. "
+             "RT/mz/charge/confidence refer to the dominant-area component in each run; "
+             "the detailed per-component table is downloadable above. "
+             "Fold change is not normalized for injection or digestion efficiency.")
+    if comparison_reference is None or not comparison_targets:
+        st.info("Select a reference and one or more comparison RAW runs in section 3.")
+    elif comparison_summary.empty:
+        st.info("No identified peptide comparisons could be calculated for these RAW files.")
     else:
-        st.info("Select at least two RAW runs to compare to one reference.")
-    if not matrix.empty and len(columns)>=2:
-        st.write("**Heatmap** — log10(MS Area + 1); zeros are retained, missing peptides are not inferred as zero.")
-        heatmap=matrix.set_index("feature")[columns]
-        heatmap=heatmap.loc[heatmap.notna().sum(axis=1).sort_values(ascending=False).index]
+        st.dataframe(comparison_summary, width="stretch", hide_index=True, height=390)
+    downloads(comparison_summary, "selected_reference_comparison", title="Reference comparison")
+    columns = [c for c in comparison_matrix.columns if c != "feature"]
+    if not comparison_matrix.empty and len(columns) >= 2:
+        st.write("**Heatmap** — log10(MS Area + 1) for the selected RAW runs only. "
+                 "Missing identifications remain missing, not zero.")
+        heatmap = comparison_matrix.set_index("feature")[columns]
+        heatmap = heatmap.loc[heatmap.notna().sum(axis=1).sort_values(ascending=False).index]
         import numpy as np
-        heatmap_log=np.log10(heatmap.clip(lower=0)+1)
-        heat=px.imshow(heatmap_log,aspect="auto",color_continuous_scale="Viridis",
-                       labels={"x":"RAW run","y":"Identification","color":"log10(Area+1)"})
-        heat.update_layout(height=min(1100,max(350,22*len(heatmap_log))))
-        st.plotly_chart(heat,width="stretch")
-        st.download_button("⬇ Heatmap HTML",heat.to_html(include_plotlyjs=True).encode("utf-8"),
-                           "area_heatmap.html","text/html")
-        ha,hb=st.columns(2)
+        heatmap_log = np.log10(heatmap.clip(lower=0) + 1)
+        heat = px.imshow(heatmap_log, aspect="auto", color_continuous_scale="Viridis",
+                         labels={"x": "RAW run", "y": "Identification", "color": "log10(Area+1)"})
+        heat.update_layout(height=min(1100, max(350, 22 * len(heatmap_log))))
+        st.plotly_chart(heat, width="stretch")
+        st.download_button("⬇ Heatmap HTML", heat.to_html(include_plotlyjs=True).encode("utf-8"),
+                           "area_heatmap.html", "text/html")
+        ha, hb = st.columns(2)
         with ha:
-            st.download_button("⬇ Heatmap PNG",heatmap_figure_bytes(matrix,"png"),
-                               "area_heatmap.png","image/png")
+            st.download_button("⬇ Heatmap PNG", heatmap_figure_bytes(comparison_matrix, "png"),
+                               "area_heatmap.png", "image/png")
         with hb:
-            st.download_button("⬇ Heatmap SVG",heatmap_figure_bytes(matrix,"svg"),
-                               "area_heatmap.svg","image/svg+xml")
-        downloads(matrix,"heatmap_source_areas",title="Heatmap data")
-    st.write("**Replicate statistics** — one peptide area per RAW injection; n=1 produces undefined SD and RSD%.")
-    group_by=st.radio("Group replicates by",["sample","sample_group"],
-                      format_func=lambda x:"Sample ID" if x=="sample" else "Group (DS/DP/stressed/control)",horizontal=True)
-    stats=replicate_statistics(selected,by=group_by)
-    st.dataframe(stats,width="stretch",hide_index=True,height=300)
-    downloads(stats,"replicate_stats",title="Replicate statistics")
-    if not areas.empty:
-        chosen_feature=st.selectbox("Peptide for grouped comparison",sorted(areas["feature"].unique()),key="group_feature")
-        sub=areas[areas["feature"]==chosen_feature]
-        groupfig=px.bar(sub,x="sample",y="ms_area",color="preparation",barmode="group",
-                        hover_data=["raw_file","experiment"],title=chosen_feature)
-        st.plotly_chart(groupfig,width="stretch")
-        st.download_button("⬇ Grouped plot PNG",simple_bar_figure_bytes(
-            sub, "raw_file", "ms_area", "Grouped peptide areas", "png"),
+            st.download_button("⬇ Heatmap SVG", heatmap_figure_bytes(comparison_matrix, "svg"),
+                               "area_heatmap.svg", "image/svg+xml")
+        downloads(comparison_matrix, "selected_heatmap_source_areas", title="Heatmap data")
+    st.write("**Replicate statistics** — based only on your selected RAW runs; "
+             "n=1 has undefined SD and RSD%.")
+    group_by = st.radio("Group replicates by", ["sample", "sample_group"],
+                        format_func=lambda x: "Sample ID" if x == "sample" else "Group (DS/DP/stressed/control)",
+                        horizontal=True)
+    stats = replicate_statistics(comparison_data, by=group_by)
+    st.dataframe(stats, width="stretch", hide_index=True, height=300)
+    downloads(stats, "selected_replicate_stats", title="Replicate statistics")
+    if not comparison_areas.empty:
+        chosen_feature = st.selectbox("Peptide for grouped comparison",
+                                      sorted(comparison_areas["feature"].unique()), key="group_feature")
+        group_data = comparison_areas.loc[comparison_areas["feature"] == chosen_feature].copy()
+        groupfig = px.bar(group_data, x="sample", y="ms_area", color="preparation", barmode="group",
+                          hover_data=["raw_file", "experiment"], title=chosen_feature)
+        st.plotly_chart(groupfig, width="stretch")
+        st.download_button("⬇ Grouped plot PNG", simple_bar_figure_bytes(
+            group_data, "raw_file", "ms_area", "Grouped peptide areas", "png"),
             "grouped_peptide_areas.png", "image/png")
-        st.download_button("⬇ Grouped plot HTML",groupfig.to_html(include_plotlyjs=True).encode("utf-8"),
-                           "grouped_peptide_areas.html","text/html")
+        st.download_button("⬇ Grouped plot HTML", groupfig.to_html(include_plotlyjs=True).encode("utf-8"),
+                           "grouped_peptide_areas.html", "text/html")
 
 with mod_tab:
     st.write("BF modification labels and MS Area per RAW run. The native PMF reader derives most labels and "
@@ -318,8 +398,13 @@ with unknown_tab:
 with report_tab:
     st.write("Export selected RAW component data and derived tables as one Excel workbook. No Thermo RAW payload included.")
     tables={"SelectedComponents":selected,"VisibleComponents":filtered,
-            "PeptideAreas":areas,"PeptideMatrix":matrix,"Modifications":mods,
-            "Unidentified":unknown,"Runs":make_runs(selected)}
+            "ComparisonRuns":comparison_catalog.loc[comparison_catalog["run"].isin(
+                [comparison_reference, *comparison_targets]
+            )] if comparison_reference is not None else comparison_catalog,
+            "DetailedPeptides":comparison_details,
+            "AnnotatedMatrix":comparison_wide,"ReferenceComparison":comparison_summary,
+            "PeptideAreas":comparison_areas,"PeptideMatrix":comparison_matrix,
+            "Modifications":mods,"Unidentified":unknown,"Runs":make_runs(selected)}
     st.download_button("⬇ Download full Excel report",excel_bytes(tables),
                        file_name="biopharma_postprocessing_report.xlsx",
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")

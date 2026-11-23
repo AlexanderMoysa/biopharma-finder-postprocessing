@@ -38,3 +38,12 @@
 - Validate native PMF site-level annotations on additional proteins and BF versions.
 - More controlled peptide/modification grouping and more explicit replicate QC.
 - Add independently validated sequence coverage and aligned unidentified-feature analysis.
+
+
+## Version 0.3.0 implemented
+
+- Independent reference RAW and selectable comparator RAW runs, excluding different preparation labels.
+- Annotated per-feature MS Area/RT matrix and enriched reference comparison table.
+- Per-component long-form details preserving RT, m/z, charge, confidence, modifications and source metadata.
+- Same user-selected RAW subset used in comparison heatmap and replicate plots.
+- Regression tests for preparation isolation, multiple comparators, missing references and zero-area component handling.

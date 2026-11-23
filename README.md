@@ -1,6 +1,6 @@
 # BioPharma Finder Post-processing
 
-**Version 0.2.1** — multi-run comparison, user-selected components, confidence filtering, PMF annotation reconstruction. Fixes the modified MS Area (%) chart and safely handles missing quantifiable fractions.
+**Version 0.3.0** — explicit reference and comparator RAW selection (same preparation only), annotated peptide comparison tables, component-level measurement export, and previously added confidence/component selection and PTM analysis.
 
 A modular, **local web application** for Thermo BioPharma Finder peptide mapping results. Import multiple peptide `.resultsbpf` archives (or compact PMF ZIPs or original BF CSV exports), retain **each RAW run separately**, filter identified and unidentified components, compare peptide areas, and export tables and figures.
 
@@ -23,22 +23,25 @@ If `py -3.13` is not available, use `python -m venv .venv` instead. The app will
 
 - **Native `.resultsbpf`**: inner `Experiment.zip` → `ExperimentSummary.json` + `.pmf`. Embedded `RawFiles.zip` is **not** extracted/read; the native reader scans the PMF's component records and run boundaries.
 - **Compact PMF ZIP**: `ExperimentSummary.json` + `.pmf`, useful for testing without Thermo RAW data.
-- **Original BF `.csv`**: supports *multiple* `MS Area:<raw>.raw` columns; other run-specific fields are normalized into individual rows. CSV provides direct `Mod`, `Site`, `Positions`, `Peptide Sequence`. In v0.2.1 the PMF importer reconstructs the peptide sequence, positions, chain name, and modification labels from the ID annotation and the embedded protein sequences. These were checked against the 4197 CSV (234/234 matched for sequence and Mod). **Disulfide connectivity and all site annotations cannot be reliably recovered from the ID string** and may remain blank; prefer CSV for complete native site assignments.
+- **Original BF `.csv`**: supports *multiple* `MS Area:<raw>.raw` columns; other run-specific fields are normalized into individual rows. CSV provides direct `Mod`, `Site`, `Positions`, `Peptide Sequence`. In v0.3.0 the PMF importer reconstructs the peptide sequence, positions, chain name, and modification labels from the ID annotation and the embedded protein sequences. These were checked against the 4197 CSV (234/234 matched for sequence and Mod). **Disulfide connectivity and all site annotations cannot be reliably recovered from the ID string** and may remain blank; prefer CSV for complete native site assignments.
 
 Load one representation **per experiment**. Uploading the corresponding CSV *and* `.resultsbpf` together is rejected as duplicate data.
 
 A single experiment can contain many RAW runs (for example, reduced and non-reduced injections). The interface initially infers `Reduced` only when explicitly indicated by filename; set the other preparation labels manually in the editable RAW run table.
 
-## Modules / pages (v0.2.1)
+## Modules / pages (v0.3.0)
 
 - **Component Explorer**: all rows start checked; uncheck individual component/RUN records and click **Apply selection** to exclude them from downstream analysis. Selection persists across filters. Select/Deselect All visible controls are provided. Set a minimum `confidence_pct` in the sidebar. A positive threshold excludes missing-confidence/unidentified records.
 - **Experiment/RAW metadata**: edit Sample ID, Group (DS, DP, stressed, control), Preparation and Replicate labels.
-- **Peptide comparison**: identified component areas summed by exact BF identification within each RAW run. Downloadable MS area matrix, figures (PNG/SVG/HTML) and a peptide chart.
-- **Multi-sample**: a selected RAW reference compared with **all** other RAW runs, fold/percent changes (undefined if reference=0/missing); heatmap PNG/SVG/HTML and grouped plots.
+- **RAW comparison configuration**: choose one reference RAW run and manually select any number of comparison RAW files. By default only RAW runs with the same `Preparation` label (Reduced / Non-reduced / Other / Unspecified) are eligible. Set missing preparation labels before comparison. This comparison-specific selection does not remove runs from Component Explorer or Modifications.
+- **Peptide comparison**: per-feature annotated matrix with peptide sequence, modification, site, positions, protein and **MS Area, dominant-peak RT (min), component count for each selected RAW**. Areas of multiple components with the exact same BF identification are summed. RT/charge/mz/confidence in aggregated comparisons refer to the highest-area component in that RAW, never an invented averaged peak. If the summed area is zero, dominant RT and other measurements are blank. A separate downloadable **Individual components** table preserves *all* component RT, m/z, charge, mass, confidence, site, source/annotation fields and areas. Downloadable figures (PNG/SVG/HTML) remain available.
+- **Multi-sample**: an explicitly selected RAW reference compared only with the **manually chosen RAW runs of the same preparation**, fold/percent changes (undefined if reference area is 0/missing). The reference comparison table includes peptide annotation and separately labelled run-specific representative RT, m/z, charge, mass, confidence, component count and area. Heatmap PNG/SVG/HTML and grouped plots use the same chosen run subset; no automatic reduced/non-reduced mixing.
 - **Replicate statistics**: one aggregated peptide area per RAW run; n, mean, sample SD and %RSD grouped by Sample ID or user-assigned Group and preparation. With n=1, SD and %RSD are undefined.
 - **Modification analysis**: BF modification labels, exploratory relative MS-area percentage for a selected modification among *unmodified + selected target PTMs of the same peptide backbone*. A missing unmodified reference returns blank, not 100%. This is not site occupancy and is not corrected for ionization efficiency.
 - **Unidentified components**: kept separate; no cross-experiment matching by Component No.
 - **Downloads**: visible/selected Component Explorer data, each analytical table, and full workbook explicitly as CSV/Excel; charts as PNG/SVG/HTML where available.
+
+The reference and comparator controls appear in **section 3 (Choose RAW files for peptide comparison)** above the analysis tabs. The first comparison table and the heatmap reflect only those RAW files. If the run's preparation shows `Unspecified`, edit it in **section 1** and click Apply RAW run labels. For peptide comparability, also verify protein identity and digestion/BF analysis method.
 
 For component equivalence between experiments, peptide comparisons use an exact identification key across native PMF and CSV, assuming samples share a compatible protein and BioPharma Finder processing method. **No automated deconvolution, unidentified alignment, automatic response normalization, or modification occupancy interpretation.**
 
