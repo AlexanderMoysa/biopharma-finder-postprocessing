@@ -55,7 +55,8 @@ def read_csv(source: str | Path | bytes, name: str | None = None) -> tuple[pd.Da
                 "ms_area": rec.get("MS Area:" + raw),
                 "confidence_pct": rec.get("Conf. Score"),
                 "delta_ppm": rec.get("∆ ppm:" + raw) or rec.get("∆ ppm"),
-                "id_type": rec.get("ID Type:" + raw) or rec.get("ID Type"),
+                "id_type": rec.get("ID Type:" + raw) or rec.get("ID Type") or "",
+                "id_type_overall": rec.get("ID Type") or "",
                 "integration_type": rec.get("Integration Type"),
                 "source_file": source_name, "source_type": "csv", "annotation_origin": "bf_csv", "import_note": "",
             }

@@ -5,6 +5,7 @@ import pandas as pd
 from bpf_postprocess.model import as_table, derive_sample_name, guess_preparation
 from bpf_postprocess.importers.pmf_binary import load_core, extract_components
 from bpf_postprocess.importers.annotation_parser import parse_identification
+from bpf_postprocess.processing.id_types import UNAVAILABLE_ID_TYPE
 
 
 def read_resultsbpf(source: str | Path, name: str | None = None) -> tuple[pd.DataFrame, dict, list[str]]:
@@ -38,7 +39,7 @@ def read_resultsbpf(source: str | Path, name: str | None = None) -> tuple[pd.Dat
             "rt_min": r["RT (min)"], "mz": r["M/Z"], "charge": r["Charge"],
             "mono_mass_da": r["Mono Mass Exp. (Da)"], "ms_area": r["MS Area"],
             "confidence_pct": r["Conf. Score (%)"], "delta_ppm": None,
-            "id_type": "", "integration_type": "",
+            "id_type": UNAVAILABLE_ID_TYPE, "id_type_overall": "", "integration_type": "",
             "source_file": source_file, "source_type": "resultsbpf",
             "annotation_origin": annotations["annotation_origin"],
             "import_note": "Sequence and Mod inferred from PMF ID; disulfide connectivity/site may be unavailable",
@@ -61,6 +62,8 @@ def read_resultsbpf(source: str | Path, name: str | None = None) -> tuple[pd.Dat
         "BioPharma Finder versions, and quantitative/regulated use.",
         "PMF Sequence and Mod are derived from ID text and protein reference; disulfide sites/connectivity "
         "cannot be recovered reliably from these annotations. Check against CSV for method validation.",
+        "PMF ID Type (Full/MS2/NoID) is not decoded; values are labeled Unavailable, not guessed. "
+        "Use original BF CSV exports for ID Type filtering.",
     ]
     if len(set(audit["unique_components_per_run"])) > 1:
         warnings.append("Different component counts between runs: check PMF compatibility")

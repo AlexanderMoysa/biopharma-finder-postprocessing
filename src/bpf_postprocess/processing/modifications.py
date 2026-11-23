@@ -1,6 +1,7 @@
 """Exploratory modification signal summaries, not chemically validated occupancy."""
 from __future__ import annotations
 import pandas as pd
+from bpf_postprocess.processing.id_types import combined_id_types
 
 
 def modification_areas(data: pd.DataFrame) -> pd.DataFrame:
@@ -14,5 +15,6 @@ def modification_areas(data: pd.DataFrame) -> pd.DataFrame:
     rows["modification"] = rows["modification"].fillna("").str.strip().replace("", "Not annotated")
     return rows.groupby(["experiment", "sample", "raw_file", "preparation", "modification"],
                         dropna=False, as_index=False).agg(
-        ms_area=("ms_area", "sum"), components=("component_no", "size")
+        ms_area=("ms_area", "sum"), components=("component_no", "size"),
+        id_types=("id_type", combined_id_types)
     )

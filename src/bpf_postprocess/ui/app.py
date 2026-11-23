@@ -16,6 +16,7 @@ import streamlit as st
 from bpf_postprocess.model import make_runs
 from bpf_postprocess.importers.loader import load_files
 from bpf_postprocess.processing.filters import filter_components
+from bpf_postprocess.processing.id_types import displayed_id_types, id_type_summary, UNAVAILABLE_ID_TYPE
 from bpf_postprocess.processing.selection import component_keys, selected_rows, update_exclusions
 from bpf_postprocess.processing.peptide_selection import (
     apply_peptide_exclusions, filter_peptide_table, peptide_inventory, update_peptide_exclusions,
@@ -112,7 +113,7 @@ def unidentified_component_editor(source: pd.DataFrame) -> None:
     keys = component_keys(candidates)
     grid = candidates.copy()
     grid.insert(0,"Selected",~keys.isin(excluded_components))
-    front = ["Selected","experiment","sample","raw_file","component_no","ms_area",
+    front = ["Selected","experiment","sample","raw_file","component_no","id_type","ms_area",
              "rt_min","mz","charge","mono_mass_da","confidence_pct"]
     grid = grid[[c for c in front if c in grid] + [c for c in grid if c not in front]]
     signature = hashlib.sha1((
@@ -209,6 +210,17 @@ with st.expander("1 · Experiment / RAW run labels", expanded=True):
 raw=dataset.data.drop(columns=["sample","sample_group","preparation","replicate"],errors="ignore").merge(
     edited_labels, on=["experiment","raw_file"], how="left", validate="many_to_one"
 )
+# Normalize older Streamlit sessions and PMF imports: missing ID Type does not
+# mean NoID. The original BF CSV supplies validated run-specific categories.
+raw["id_type"] = displayed_id_types(raw["id_type"])
+if raw["id_type"].eq(UNAVAILABLE_ID_TYPE).any():
+    unavailable = int(raw["id_type"].eq(UNAVAILABLE_ID_TYPE).sum())
+    st.warning(
+        f"ID Type is unavailable for {unavailable:,} component-run records. "
+        "Native PMF/.resultsbpf ID Type is not yet decoded. For MS2/Full/NoID "
+        "classification, import the original BioPharma Finder CSV export. "
+        "Unavailable is not the same as NoID."
+    )
 st.dataframe(make_runs(raw),hide_index=True,width="stretch")
 with st.expander("Download RAW run overview"):
     downloads(make_runs(raw),"run_overview")
@@ -229,9 +241,21 @@ mod_q=st.sidebar.text_input("Modification contains")
 min_conf=st.sidebar.slider("Minimum confidence (%)",min_value=0.0,max_value=100.0,value=0.0,step=0.5,
                            help="At 0 no confidence filter. Above 0, unidentified and missing-confidence records are excluded.")
 min_area=st.sidebar.number_input("Minimum MS Area",min_value=0.0,value=0.0)
+raw_id_types=displayed_id_types(raw["id_type"])
+options=sorted(raw_id_types.unique().tolist())
+selected_id_types=st.sidebar.multiselect(
+    "ID Type (per RAW)", options, default=options,
+    key=f"id_type_filter_{st.session_state.get('comparison_session_epoch',0)}",
+    help="The per-RAW BioPharma Finder ID Type (MS2 / Full / NoID). "
+         "The global 'Both' flag is retained separately. PMF reader cannot yet decode this field; "
+         "Unavailable is not NoID. All types are included by default.",
+)
+if UNAVAILABLE_ID_TYPE in options:
+    st.sidebar.caption("Some imported PMF records have ID Type unavailable. "
+                       "They are not automatically classified as NoID.")
 filtered=filter_components(raw,samples=selected_samples,preparations=selected_preps, identified=which_id,
                            peptide_query=peptide_q,modification_query=mod_q,min_area=min_area,
-                           min_confidence_pct=min_conf).reset_index(drop=True)
+                           min_confidence_pct=min_conf,id_types=selected_id_types).reset_index(drop=True)
 
 st.subheader("2 · Component explorer")
 excluded=st.session_state.setdefault("excluded_component_keys",set())
@@ -252,7 +276,7 @@ signature=hashlib.sha1((str(st.session_state.get('select_version',0))+"|"+
                          "|".join(component_keys(filtered).tolist())).encode()).hexdigest()[:16]
 preferred_cols = [
     "Selected", "experiment", "sample", "raw_file", "preparation", "component_no",
-    "identified", "confidence_pct", "peptide_sequence", "modification", "site",
+    "identified", "id_type", "id_type_overall", "confidence_pct", "peptide_sequence", "modification", "site",
     "identification", "ms_area", "rt_min", "mz", "charge", "positions", "protein"
 ]
 selectable=selectable[[c for c in preferred_cols if c in selectable.columns] +
@@ -375,7 +399,7 @@ with peptide_tab:
              "Selection applies to every RAW and is shared across analysis tabs.")
     peptide_table_editor(comparison_wide_candidates,"peptide_comparison",height=370)
     downloads(comparison_wide, "comparison_annotated_matrix", title="Annotated comparison")
-    st.write("**Every individual identified component**, including RT, sequence, "
+    st.write("**Every individual identified component**, including ID Type (RAW and overall), RT, sequence, "
              "modification, site, confidence, charge, m/z and source run.")
     st.dataframe(comparison_details, width="stretch", hide_index=True, height=320)
     downloads(comparison_details, "comparison_all_peptide_components", title="Individual components")
@@ -470,7 +494,7 @@ with mod_tab:
              "A checkbox removes that peptide from the modification-area and "
              "relative-fraction calculations across all RAW runs.")
     peptide_table_editor(peptide_candidates,"modifications",height=330)
-    st.write("**Modification MS Area summary (selected peptides)**")
+    st.write("**Modification MS Area summary (selected peptides)** — ID types are aggregated per RAW.")
     st.dataframe(mods,width="stretch",hide_index=True,height=270)
     downloads(mods,"modification_areas",title="Modification areas")
     st.divider()
@@ -521,7 +545,7 @@ with unknown_tab:
     st.write("Unknown components have no peptide identification, so they are selected "
              "**individually** (experiment + RAW + component number), not by peptide ID.")
     unidentified_component_editor(filtered)
-    st.write("**Selected unidentified component summary**")
+    st.write("**Selected unidentified component summary** — NoID for CSV, Unavailable for undecoded PMF.")
     st.dataframe(unknown,width="stretch",hide_index=True)
     downloads(unknown,"unidentified_summary",title="Unknown summary")
     unknown_rows=analysis_selected.loc[~analysis_selected["identified"]].copy()
@@ -531,6 +555,9 @@ with report_tab:
     st.write("**Review peptide selection before export.** All peptides are selected by default; "
              "changes made here apply to all analytical tabs and the report.")
     peptide_table_editor(peptide_candidates,"export_report",height=310)
+    st.write("**ID Type distribution** (selected component records; filterable with Confidence and MS Area).")
+    st.dataframe(id_type_summary(analysis_selected), width="stretch", hide_index=True, height=220)
+    downloads(id_type_summary(analysis_selected), "id_type_summary", title="ID Type summary")
     st.write("Export selected component data and derived tables as one Excel workbook. "
              "Raw MS files are never included. The analytical sheets contain only selected "
              "peptides and components. **VisibleComponents** and **PeptideSelection** are "
@@ -540,6 +567,7 @@ with report_tab:
     if not export_selection.empty:
         export_selection.insert(0,"Selected",~export_selection["feature"].isin(excluded_peptides))
     tables={"SelectedComponents":analysis_selected,"VisibleComponents":filtered,
+            "IDTypeSummary":id_type_summary(analysis_selected),
             "PeptideSelection":export_selection,
             "ComparisonRuns":comparison_catalog.loc[comparison_catalog["run"].isin(
                 [comparison_reference, *comparison_targets]

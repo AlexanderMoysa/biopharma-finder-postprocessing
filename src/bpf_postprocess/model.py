@@ -12,7 +12,7 @@ COLS = [
     "replicate", "component_no", "identified", "identification",
     "peptide_sequence", "modification", "site", "positions", "protein",
     "rt_min", "mz", "charge", "mono_mass_da", "ms_area",
-    "confidence_pct", "delta_ppm", "id_type", "integration_type",
+    "confidence_pct", "delta_ppm", "id_type", "id_type_overall", "integration_type",
     "source_file", "source_type", "annotation_origin", "import_note",
 ]
 NUMERIC_COLS = ["component_no", "rt_min", "mz", "charge", "mono_mass_da", "ms_area", "confidence_pct", "delta_ppm"]
@@ -30,7 +30,7 @@ def as_table(records: list[dict] | pd.DataFrame) -> pd.DataFrame:
     for col in NUMERIC_COLS:
         table[col] = pd.to_numeric(table[col], errors="coerce")
     table["identified"] = table["identified"].fillna(False).astype(bool)
-    for col in ("identification", "peptide_sequence", "modification", "site", "positions", "protein"):
+    for col in ("identification", "peptide_sequence", "modification", "site", "positions", "protein", "id_type", "id_type_overall"):
         table[col] = table[col].fillna("").astype(str)
     return table
 

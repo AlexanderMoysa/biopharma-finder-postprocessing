@@ -2,6 +2,7 @@
 from __future__ import annotations
 import numpy as np
 import pandas as pd
+from bpf_postprocess.processing.id_types import combined_id_types
 
 
 def feature_key(df: pd.DataFrame) -> pd.Series:
@@ -26,7 +27,8 @@ def long_peptide_areas(df: pd.DataFrame) -> pd.DataFrame:
     grouped = identified.groupby(
         ["experiment", "sample", "raw_file", "preparation", "feature"],
         as_index=False, dropna=False,
-    ).agg(ms_area=("ms_area", "sum"), component_count=("component_no", "size"))
+    ).agg(ms_area=("ms_area", "sum"), component_count=("component_no", "size"),
+          id_types=("id_type", combined_id_types))
     return grouped
 
 

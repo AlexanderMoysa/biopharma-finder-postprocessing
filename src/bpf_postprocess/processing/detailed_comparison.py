@@ -15,6 +15,7 @@ from collections.abc import Sequence
 import pandas as pd
 
 from bpf_postprocess.processing.multisample import reference_comparison
+from bpf_postprocess.processing.id_types import combined_id_types, displayed_id_types
 
 RUN_ID_COLS = ("experiment", "raw_file")
 ANNOTATION_COLS = ("peptide_sequence", "modification", "site", "positions", "protein")
@@ -115,19 +116,24 @@ def _run_summaries(identified: pd.DataFrame) -> pd.DataFrame:
     are shown from the largest-area component in that run and labeled as such.
     The full-component table is available for other peaks/charge states.
     """
-    cols = ["feature", "run", "ms_area", "component_count", "rt_min", "mz", "charge", "mono_mass_da", "confidence_pct", "delta_ppm", "component_no"]
+    cols = ["feature", "run", "ms_area", "component_count", "rt_min", "mz", "charge", "mono_mass_da", "confidence_pct", "delta_ppm", "component_no", "id_type", "id_types"]
     if identified.empty:
         return pd.DataFrame(columns=cols)
     keys = ["feature", "run"]
     count = identified.groupby(keys, as_index=False, dropna=False).agg(
         ms_area=("ms_area", lambda v: v.sum(min_count=1)),
         component_count=("component_no", "size"),
+        id_types=("id_type", combined_id_types),
     )
+    # Keep the ID Type of the dominant-area component, and the set of all
+    # observed identification types within the whole peptide/run group.
+    identified = identified.copy()
+    identified["id_type"] = displayed_id_types(identified["id_type"])
     # NaN areas sort last; stable ordering makes repeated outputs deterministic.
     dominant = (identified.sort_values(["ms_area", "component_no"], ascending=[False, True],
                                       na_position="last", kind="stable")
                 .drop_duplicates(keys, keep="first"))
-    dominant_cols = ["rt_min", "mz", "charge", "mono_mass_da", "confidence_pct", "delta_ppm", "component_no"]
+    dominant_cols = ["rt_min", "mz", "charge", "mono_mass_da", "confidence_pct", "delta_ppm", "component_no", "id_type"]
     result = count.merge(dominant[keys + dominant_cols], on=keys, validate="one_to_one")[cols]
     # BioPharma Finder may carry an RT/mz/charge for a component that has a
     # reported area of zero in this injection. Such values are retained in
@@ -187,10 +193,11 @@ def annotated_area_matrix(frame: pd.DataFrame, reference: str, comparisons: Sequ
         return metadata
     obs = _run_summaries(identified)
     for name in [reference, *comparisons]:
-        current = obs.loc[obs["run"] == name, ["feature", "ms_area", "rt_min", "component_count"]].rename(
+        current = obs.loc[obs["run"] == name, ["feature", "ms_area", "rt_min", "component_count", "id_types"]].rename(
             columns={"ms_area": f"MS Area | {name}",
                      "rt_min": f"RT dominant (min) | {name}",
-                     "component_count": f"Components | {name}"})
+                     "component_count": f"Components | {name}",
+                     "id_types": f"ID Type | {name}"})
         metadata = metadata.merge(current, on="feature", how="left", validate="one_to_one")
     return metadata.sort_values("feature").reset_index(drop=True)
 
@@ -205,7 +212,7 @@ def detailed_component_records(frame: pd.DataFrame, reference: str, comparisons:
     if identified.empty:
         return identified
     identified["role"] = identified["run"].eq(reference).map({True: "Reference", False: "Comparison"})
-    front = ["role", "run", "experiment", "sample", "sample_group", "raw_file", "preparation", "component_no",
+    front = ["role", "run", "experiment", "sample", "sample_group", "raw_file", "preparation", "component_no", "id_type", "id_type_overall",
              "peptide_sequence", "modification", "site", "positions", "protein", "identification", "confidence_pct",
              "rt_min", "mz", "charge", "mono_mass_da", "delta_ppm", "ms_area"]
     return identified[[c for c in front if c in identified] + [c for c in identified if c not in front]].sort_values(
@@ -230,6 +237,7 @@ def run_labeled_reference_matrix(frame: pd.DataFrame, reference: str, comparison
         f"MS Area | {reference}": f"MS Area | {reference} [REFERENCE]",
         f"RT dominant (min) | {reference}": f"RT dominant (min) | {reference} [REFERENCE]",
         f"Components | {reference}": f"Components | {reference} [REFERENCE]",
+        f"ID Type | {reference}": f"ID Type | {reference} [REFERENCE]",
     }
     matrix = matrix.rename(columns=reference_columns)
     ordering = [*base, *reference_columns.values()]
@@ -242,6 +250,7 @@ def run_labeled_reference_matrix(frame: pd.DataFrame, reference: str, comparison
             f"MS Area | {comparator}",
             f"RT dominant (min) | {comparator}",
             f"Components | {comparator}",
+            f"ID Type | {comparator}",
         ])
         suffix = f"{comparator} vs {reference}"
         names = {

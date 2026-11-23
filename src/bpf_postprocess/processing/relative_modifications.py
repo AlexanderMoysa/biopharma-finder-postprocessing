@@ -6,6 +6,7 @@ adducts, gas-phase fragments, and nonspecific cleavage remain excluded.
 """
 from __future__ import annotations
 import pandas as pd
+from bpf_postprocess.processing.id_types import combined_id_types
 
 # Conservative default targets. The UI may let users choose another literal
 # modification, but the output must still be described as an *MS area fraction*.
@@ -24,7 +25,7 @@ def modification_fractions(frame: pd.DataFrame, target_mods: list[str] | tuple[s
     no occupancy is inferred when an unmodified form was not identified.
     """
     targets=[str(x).strip() for x in target_mods if str(x).strip() and x not in ('None','Not annotated')]
-    cols=['experiment','sample','sample_group','raw_file','preparation','backbone','modification','unmodified_area','modified_area','denominator_area','modified_ms_area_pct','reference_present']
+    cols=['experiment','sample','sample_group','raw_file','preparation','backbone','modification','unmodified_area','modified_area','denominator_area','modified_ms_area_pct','reference_present','modified_id_types','unmodified_id_types']
     if not targets:
         return pd.DataFrame(columns=cols)
     identified = frame[frame['identified']].copy()
@@ -36,9 +37,16 @@ def modification_fractions(frame: pd.DataFrame, target_mods: list[str] | tuple[s
     if eligible.empty:
         return pd.DataFrame(columns=cols)
     keys=['experiment','sample','sample_group','raw_file','preparation','backbone']
-    agg=eligible.groupby(keys+['modification'], dropna=False, as_index=False)['ms_area'].sum()
-    unmod=agg[agg['modification'].isin(['None',''])].groupby(keys, dropna=False, as_index=False)['ms_area'].sum().rename(columns={'ms_area':'unmodified_area'})
-    modified=agg[agg['modification'].isin(targets)].rename(columns={'ms_area':'modified_area'})
+    agg=eligible.groupby(keys+['modification'], dropna=False, as_index=False).agg(
+        ms_area=('ms_area', 'sum'), id_types=('id_type', combined_id_types)
+    )
+    unmod=agg[agg['modification'].isin(['None',''])].groupby(keys, dropna=False, as_index=False).agg(
+        unmodified_area=('ms_area','sum'),
+        unmodified_id_types=('id_types', lambda x: '; '.join(sorted(set('; '.join(x).split('; ')) - {''}))),
+    )
+    modified=agg[agg['modification'].isin(targets)].rename(columns={
+        'ms_area':'modified_area', 'id_types':'modified_id_types'
+    })
     if modified.empty:
         return pd.DataFrame(columns=cols)
     total_modified=modified.groupby(keys,dropna=False,as_index=False)['modified_area'].sum().rename(columns={'modified_area':'total_selected_ptm_area'})

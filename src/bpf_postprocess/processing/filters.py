@@ -1,11 +1,13 @@
 """Pure, reusable component filters; UI-independent."""
 from __future__ import annotations
 import pandas as pd
+from bpf_postprocess.processing.id_types import displayed_id_types
 
 
 def filter_components(
     frame: pd.DataFrame, *, samples: list[str] | None = None,
     raw_files: list[str] | None = None, preparations: list[str] | None = None,
+    id_types: list[str] | None = None,
     identified: str = "All", peptide_query: str = "", modification_query: str = "",
     min_area: float = 0, min_confidence_pct: float = 0,
 ) -> pd.DataFrame:
@@ -16,6 +18,8 @@ def filter_components(
         data = data[data["raw_file"].isin(raw_files)]
     if preparations is not None:
         data = data[data["preparation"].isin(preparations)]
+    if id_types is not None:
+        data = data[displayed_id_types(data["id_type"]).isin(id_types)]
     if identified == "Identified":
         data = data[data["identified"]]
     if identified == "Unidentified":

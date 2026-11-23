@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 from bpf_postprocess.processing.comparison import long_peptide_areas, compare_runs
+from bpf_postprocess.processing.id_types import combined_id_types
 
 
 def reference_comparison(frame: pd.DataFrame, reference_run: str) -> pd.DataFrame:
@@ -42,13 +43,14 @@ def replicate_statistics(frame: pd.DataFrame, by: str = 'sample') -> pd.DataFram
     areas = long_peptide_areas(frame)
     cols = [by, 'preparation', 'feature']
     if areas.empty:
-        return pd.DataFrame(columns=cols + ['n_runs', 'mean_ms_area', 'sd_ms_area', 'rsd_pct'])
+        return pd.DataFrame(columns=cols + ['n_runs', 'mean_ms_area', 'sd_ms_area', 'rsd_pct', 'id_types'])
     if by == 'sample_group':
         # The group is a run-level label; avoid assuming it is a sample property.
         labels=frame[['experiment','raw_file','sample_group']].drop_duplicates()
         areas=areas.merge(labels, on=['experiment','raw_file'], how='left', validate='many_to_one')
     values=areas.groupby(cols, dropna=False, as_index=False).agg(
-        n_runs=('ms_area', 'count'), mean_ms_area=('ms_area', 'mean'), sd_ms_area=('ms_area','std')
+        n_runs=('ms_area', 'count'), mean_ms_area=('ms_area', 'mean'), sd_ms_area=('ms_area','std'),
+        id_types=('id_types', lambda x: '; '.join(sorted(set('; '.join(x.fillna('')).split('; ')) - {''})))
     )
     values['rsd_pct'] = 100*values['sd_ms_area']/values['mean_ms_area'].where(values['mean_ms_area']>0)
     return values.sort_values(cols).reset_index(drop=True)

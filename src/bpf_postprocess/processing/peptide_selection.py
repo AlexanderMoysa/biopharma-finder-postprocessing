@@ -8,6 +8,7 @@ The original component records stay intact for later re-selection.
 from __future__ import annotations
 
 import pandas as pd
+from bpf_postprocess.processing.id_types import combined_id_types
 
 
 ANNOTATIONS = ("peptide_sequence", "modification", "site", "positions", "protein")
@@ -70,7 +71,7 @@ def peptide_inventory(frame: pd.DataFrame) -> pd.DataFrame:
     exclusions, so previously deselected peptides remain visible and reversible.
     No cross-peptide occupancy claim is made from MS Area sums.
     """
-    columns = ["feature", *ANNOTATIONS, "raw_runs", "components", "total_ms_area"]
+    columns = ["feature", *ANNOTATIONS, "id_types", "raw_runs", "components", "total_ms_area"]
     if frame.empty:
         return pd.DataFrame(columns=columns)
     rows = frame.loc[frame["identified"]].copy()
@@ -85,6 +86,7 @@ def peptide_inventory(frame: pd.DataFrame) -> pd.DataFrame:
         ))
     result = rows.groupby("feature", as_index=False, sort=True).agg(
         **{column: (column, joined) for column in ANNOTATIONS},
+        id_types=("id_type", combined_id_types),
         raw_runs=("run_key", "nunique"),
         components=("component_no", "size"),
         total_ms_area=("ms_area", lambda s: s.sum(min_count=1)),
