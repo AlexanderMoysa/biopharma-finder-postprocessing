@@ -11,6 +11,7 @@ from bpf_postprocess.processing.detailed_comparison import (
     detailed_component_records,
     detailed_reference_comparison,
     run_catalog,
+    run_labeled_reference_matrix,
     select_comparison_runs,
 )
 
@@ -153,3 +154,46 @@ def test_no_detectable_area_keeps_original_rt_only_in_component_table():
     detail = detailed_component_records(data, ref, [comp])
     original = detail.loc[detail.raw_file == "4197_NR.raw", "rt_min"]
     assert set(original) == {10.1, 10.6}
+
+
+def test_wide_reference_matrix_labels_every_raw_metric_for_three_samples():
+    data = _sample_data()
+    ref = "4197_combined / 4197_NR.raw"
+    c1 = "4204_combined / 4204_NR.raw"
+    c2 = "4300_combined / 4300_NR.raw"
+    result = run_labeled_reference_matrix(data, ref, [c1, c2])
+    assert len(result) == 1  # one peptide, NOT one row per comparison
+    assert result.iloc[0][f"MS Area | {ref} [REFERENCE]"] == 150
+    assert result.iloc[0][f"MS Area | {c1}"] == 120
+    assert result.iloc[0][f"MS Area | {c2}"] == 160
+    assert result.iloc[0][f"RT dominant (min) | {ref} [REFERENCE]"] == pytest.approx(10.1)
+    assert result.iloc[0][f"Fold | {c1} vs {ref}"] == pytest.approx(0.8)
+    assert result.iloc[0][f"Fold | {c2} vs {ref}"] == pytest.approx(160 / 150)
+    assert result.iloc[0][f"Change (%) | {c1} vs {ref}"] == pytest.approx(-20)
+    assert result.iloc[0][f"Change (%) | {c2} vs {ref}"] == pytest.approx(100 * (160 / 150 - 1))
+    assert not any("DTT" in col for col in result.columns)
+    assert not any(col in result.columns for col in ("reference_area", "comparison_area"))
+
+
+def test_wide_reference_missing_area_stays_blank_and_never_zero():
+    data = _sample_data()
+    new = as_table([dict(experiment="4204_combined", sample="4204", raw_file="4204_NR.raw",
+                         preparation="Non-reduced", component_no=88, identified=True,
+                         identification="2:R22-R32 = 1427.8m", peptide_sequence="RGFFYTPKTRR",
+                         modification="None", ms_area=33., rt_min=5.3)])
+    data = pd.concat([data, new], ignore_index=True)
+    ref = "4197_combined / 4197_NR.raw"
+    cmp = "4204_combined / 4204_NR.raw"
+    matrix = run_labeled_reference_matrix(data, ref, [cmp])
+    row = matrix.loc[matrix["feature"] == "2:R22-R32 = 1427.8m"].iloc[0]
+    assert pd.isna(row[f"MS Area | {ref} [REFERENCE]"])
+    assert row[f"MS Area | {cmp}"] == 33
+    assert pd.isna(row[f"Fold | {cmp} vs {ref}"])
+    assert pd.isna(row[f"Change (%) | {cmp} vs {ref}"])
+
+
+def test_labeled_comparison_rejects_reduced_mixture():
+    data = _sample_data()
+    ref = "4197_combined / 4197_NR.raw"
+    with pytest.raises(ValueError, match="Reduced and non-reduced"):
+        run_labeled_reference_matrix(data, ref, ["4204_combined / 4204_DTT.raw"])

@@ -210,3 +210,54 @@ def detailed_component_records(frame: pd.DataFrame, reference: str, comparisons:
              "rt_min", "mz", "charge", "mono_mass_da", "delta_ppm", "ms_area"]
     return identified[[c for c in front if c in identified] + [c for c in identified if c not in front]].sort_values(
         ["run", "identification", "component_no"], kind="stable").reset_index(drop=True)
+
+
+def run_labeled_reference_matrix(frame: pd.DataFrame, reference: str, comparisons: Sequence[str]) -> pd.DataFrame:
+    """One row per peptide, with *RAW file names in every numeric header*.
+
+    For 2, 3, or more samples, each comparator gets its own MS Area, RT and
+    fold/delta/%-change columns. No different-preparation run is accepted.
+    Missing peptide areas/ratios remain NaN instead of being imputed as zero.
+    The detailed long-form reference table is kept separately for auditing.
+    """
+    matrix = annotated_area_matrix(frame, reference, comparisons)
+    if matrix.empty:
+        return matrix
+
+    base = ["feature", *ANNOTATION_COLS]
+    # Mark reference measurements explicitly, including the full RAW filename.
+    reference_columns = {
+        f"MS Area | {reference}": f"MS Area | {reference} [REFERENCE]",
+        f"RT dominant (min) | {reference}": f"RT dominant (min) | {reference} [REFERENCE]",
+        f"Components | {reference}": f"Components | {reference} [REFERENCE]",
+    }
+    matrix = matrix.rename(columns=reference_columns)
+    ordering = [*base, *reference_columns.values()]
+    detailed = detailed_reference_comparison(frame, reference, comparisons)
+
+    for comparator in comparisons:
+        # Area and RT were already built from exactly this RAW, not from an
+        # arbitrary 'comparison_area' belonging to another selected sample.
+        ordering.extend([
+            f"MS Area | {comparator}",
+            f"RT dominant (min) | {comparator}",
+            f"Components | {comparator}",
+        ])
+        suffix = f"{comparator} vs {reference}"
+        names = {
+            "delta_area": f"Delta MS Area | {suffix}",
+            "fold_vs_reference": f"Fold | {suffix}",
+            "percent_change": f"Change (%) | {suffix}",
+        }
+        if detailed.empty:
+            for name in names.values():
+                matrix[name] = float("nan")
+        else:
+            rows = detailed.loc[
+                detailed["comparison_run"] == comparator,
+                ["feature", *names],
+            ].rename(columns=names)
+            matrix = matrix.merge(rows, on="feature", how="left", validate="one_to_one")
+        ordering.extend(names.values())
+
+    return matrix[ordering].sort_values("feature").reset_index(drop=True)

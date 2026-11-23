@@ -1,6 +1,6 @@
 # BioPharma Finder Post-processing
 
-**Version 0.3.0** — explicit reference and comparator RAW selection (same preparation only), annotated peptide comparison tables, component-level measurement export, and previously added confidence/component selection and PTM analysis.
+**Version 0.3.1** — explicit reference and comparator RAW selection (same preparation only), annotated peptide comparison tables, component-level measurement export, and previously added confidence/component selection and PTM analysis.
 
 A modular, **local web application** for Thermo BioPharma Finder peptide mapping results. Import multiple peptide `.resultsbpf` archives (or compact PMF ZIPs or original BF CSV exports), retain **each RAW run separately**, filter identified and unidentified components, compare peptide areas, and export tables and figures.
 
@@ -29,7 +29,7 @@ Load one representation **per experiment**. Uploading the corresponding CSV *and
 
 A single experiment can contain many RAW runs (for example, reduced and non-reduced injections). The interface initially infers `Reduced` only when explicitly indicated by filename; set the other preparation labels manually in the editable RAW run table.
 
-## Modules / pages (v0.3.0)
+## Modules / pages (v0.3.1)
 
 - **Component Explorer**: all rows start checked; uncheck individual component/RUN records and click **Apply selection** to exclude them from downstream analysis. Selection persists across filters. Select/Deselect All visible controls are provided. Set a minimum `confidence_pct` in the sidebar. A positive threshold excludes missing-confidence/unidentified records.
 - **Experiment/RAW metadata**: edit Sample ID, Group (DS, DP, stressed, control), Preparation and Replicate labels.
@@ -85,3 +85,14 @@ tests/          # synthetic unit tests; optional local instrument fixture
 - The Streamlit app runs locally and has no network/API integration. Dependencies need normal pip access during installation.
 
 See [Russian quick start](docs/GETTING_STARTED_RU.md), [roadmap](docs/ROADMAP.md), and [architecture](docs/ARCHITECTURE.md) for the data contract and known limitations.
+
+### v0.3.1 — RAW-labeled multi-sample comparison
+
+The primary **Multi-sample & replicates** table is now one row per identified peptide.
+Every quantitative column includes the exact `Experiment / RAW filename`, and the
+reference metrics carry `[REFERENCE]`. Each selected comparator has its own
+`MS Area`, `RT`, `component count`, `Delta MS Area`, `Fold`, and `Change (%)` columns.
+This applies to 2, 3, or more RAW runs without mixing reduced and non-reduced
+preparations. The original long-form detailed comparison remains available in
+a collapsible section and both forms are included in Excel/CSV exports.
+Missing peptide signals remain blank (NaN), not assumed to be zero.

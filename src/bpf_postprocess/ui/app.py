@@ -22,6 +22,7 @@ from bpf_postprocess.processing.multisample import reference_comparison, replica
 from bpf_postprocess.processing.detailed_comparison import (
     run_catalog, compatible_run_ids, select_comparison_runs,
     annotated_area_matrix, detailed_reference_comparison, detailed_component_records,
+    run_labeled_reference_matrix,
 )
 from bpf_postprocess.processing.modifications import modification_areas
 from bpf_postprocess.processing.relative_modifications import DEFAULT_PTMS, modification_fractions
@@ -194,6 +195,7 @@ comparison_matrix = pd.DataFrame(columns=["feature"])
 comparison_wide = pd.DataFrame(columns=["feature", "peptide_sequence", "modification", "site", "positions", "protein"])
 comparison_details = pd.DataFrame()
 comparison_summary = pd.DataFrame()
+comparison_labeled = pd.DataFrame()
 comparison_areas = pd.DataFrame()
 
 with st.expander("3 · Choose RAW files for peptide comparison", expanded=True):
@@ -239,6 +241,7 @@ with st.expander("3 · Choose RAW files for peptide comparison", expanded=True):
         comparison_wide = annotated_area_matrix(selected, comparison_reference, comparison_targets)
         comparison_details = detailed_component_records(selected, comparison_reference, comparison_targets)
         comparison_summary = detailed_reference_comparison(selected, comparison_reference, comparison_targets)
+        comparison_labeled = run_labeled_reference_matrix(selected, comparison_reference, comparison_targets)
         comparison_areas = long_peptide_areas(comparison_data)
 
 areas=long_peptide_areas(selected)
@@ -285,13 +288,22 @@ with comparison_tab:
              "RT/mz/charge/confidence refer to the dominant-area component in each run; "
              "the detailed per-component table is downloadable above. "
              "Fold change is not normalized for injection or digestion efficiency.")
+    st.write("**Wide comparison — one row per peptide.** Every MS Area, RT, "
+             "Delta, Fold and Change (%) column is labeled with its RAW file; "
+             "the reference is marked **[REFERENCE]**. "
+             "Each additional RAW adds its own columns without mixing samples.")
     if comparison_reference is None or not comparison_targets:
         st.info("Select a reference and one or more comparison RAW runs in section 3.")
-    elif comparison_summary.empty:
+    elif comparison_labeled.empty:
         st.info("No identified peptide comparisons could be calculated for these RAW files.")
     else:
-        st.dataframe(comparison_summary, width="stretch", hide_index=True, height=390)
-    downloads(comparison_summary, "selected_reference_comparison", title="Reference comparison")
+        st.dataframe(comparison_labeled, width="stretch", hide_index=True, height=390)
+    downloads(comparison_labeled, "reference_comparison_by_raw", title="RAW-labeled comparison")
+    with st.expander("Detailed long-format table (one peptide × comparison RAW)"):
+        st.caption("The reference_run and comparison_run columns explicitly identify both files "
+                   "for every row; useful for sorting, statistics and software import.")
+        st.dataframe(comparison_summary, width="stretch", hide_index=True, height=320)
+        downloads(comparison_summary, "selected_reference_comparison", title="Long reference comparison")
     columns = [c for c in comparison_matrix.columns if c != "feature"]
     if not comparison_matrix.empty and len(columns) >= 2:
         st.write("**Heatmap** — log10(MS Area + 1) for the selected RAW runs only. "
@@ -402,7 +414,8 @@ with report_tab:
                 [comparison_reference, *comparison_targets]
             )] if comparison_reference is not None else comparison_catalog,
             "DetailedPeptides":comparison_details,
-            "AnnotatedMatrix":comparison_wide,"ReferenceComparison":comparison_summary,
+            "AnnotatedMatrix":comparison_wide,"LabeledComparison":comparison_labeled,
+            "ReferenceComparison":comparison_summary,
             "PeptideAreas":comparison_areas,"PeptideMatrix":comparison_matrix,
             "Modifications":mods,"Unidentified":unknown,"Runs":make_runs(selected)}
     st.download_button("⬇ Download full Excel report",excel_bytes(tables),
