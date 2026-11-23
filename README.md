@@ -1,6 +1,6 @@
 # BioPharma Finder Post-processing
 
-**Version 0.3.1** — explicit reference and comparator RAW selection (same preparation only), annotated peptide comparison tables, component-level measurement export, and previously added confidence/component selection and PTM analysis.
+**Version 0.3.2** — synchronized per-peptide selection across all analysis tabs (all selected by default), selection of unidentified components by RAW/component, and export of only selected analytical results. Earlier RAW-run comparison and peptide annotation features are retained.
 
 A modular, **local web application** for Thermo BioPharma Finder peptide mapping results. Import multiple peptide `.resultsbpf` archives (or compact PMF ZIPs or original BF CSV exports), retain **each RAW run separately**, filter identified and unidentified components, compare peptide areas, and export tables and figures.
 
@@ -29,7 +29,7 @@ Load one representation **per experiment**. Uploading the corresponding CSV *and
 
 A single experiment can contain many RAW runs (for example, reduced and non-reduced injections). The interface initially infers `Reduced` only when explicitly indicated by filename; set the other preparation labels manually in the editable RAW run table.
 
-## Modules / pages (v0.3.1)
+## Modules / pages (v0.3.2)
 
 - **Component Explorer**: all rows start checked; uncheck individual component/RUN records and click **Apply selection** to exclude them from downstream analysis. Selection persists across filters. Select/Deselect All visible controls are provided. Set a minimum `confidence_pct` in the sidebar. A positive threshold excludes missing-confidence/unidentified records.
 - **Experiment/RAW metadata**: edit Sample ID, Group (DS, DP, stressed, control), Preparation and Replicate labels.
@@ -39,7 +39,8 @@ A single experiment can contain many RAW runs (for example, reduced and non-redu
 - **Replicate statistics**: one aggregated peptide area per RAW run; n, mean, sample SD and %RSD grouped by Sample ID or user-assigned Group and preparation. With n=1, SD and %RSD are undefined.
 - **Modification analysis**: BF modification labels, exploratory relative MS-area percentage for a selected modification among *unmodified + selected target PTMs of the same peptide backbone*. A missing unmodified reference returns blank, not 100%. This is not site occupancy and is not corrected for ionization efficiency.
 - **Unidentified components**: kept separate; no cross-experiment matching by Component No.
-- **Downloads**: visible/selected Component Explorer data, each analytical table, and full workbook explicitly as CSV/Excel; charts as PNG/SVG/HTML where available.
+- **Selection in every analysis tab (v0.3.2)**: use the **Use in analysis** checkbox at the start of each peptide matrix, RAW-labeled comparison, modification peptide inventory or export selection grid; click **Apply peptide selection**. All peptides are checked by default. The exclusion is keyed to full BF peptide identification and applies to every RAW and all tabs, including plots and selected-result exports. The editor retains unchecked rows so they can be checked again. **Unidentified** has no peptide ID, so it provides independent RAW/component checkboxes. All controls also offer **Select all visible** / **Deselect all visible**. Peptide selection is in addition to Component Explorer row selection.
+- **Downloads**: selected analytical tables and full workbook explicitly as CSV/Excel; charts as PNG/SVG/HTML where available. `SelectedComponents` contains only chosen peptides/components; `VisibleComponents` and `PeptideSelection` are audit sheets that intentionally include filtered-out items with selection metadata for reproducibility.
 
 The reference and comparator controls appear in **section 3 (Choose RAW files for peptide comparison)** above the analysis tabs. The first comparison table and the heatmap reflect only those RAW files. If the run's preparation shows `Unspecified`, edit it in **section 1** and click Apply RAW run labels. For peptide comparability, also verify protein identity and digestion/BF analysis method.
 
