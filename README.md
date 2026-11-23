@@ -1,6 +1,6 @@
 # BioPharma Finder Post-processing
 
-**Version 0.3.3** — adds RAW-specific BioPharma Finder **ID Type** values (MS2 / Full / NoID) from original CSV, a default-all ID Type multiselect alongside confidence and MS Area filters, ID Type throughout comparison/modification/unidentified tables, and an exportable ID Type summary. Missing native PMF ID Type is clearly labeled **Unavailable (not decoded)**, never guessed as NoID. Earlier multi-RAW comparison and peptide selection features are retained.
+**Version 0.4.0** — adds RAW-specific BioPharma Finder **ID Type** values (MS2 / Full / NoID) from original CSV, a default-all ID Type multiselect alongside confidence and MS Area filters, ID Type throughout comparison/modification/unidentified tables, and an exportable ID Type summary. Missing native PMF ID Type is clearly labeled **Unavailable (not decoded)**, never guessed as NoID. Earlier multi-RAW comparison and peptide selection features are retained.
 
 A modular, **local web application** for Thermo BioPharma Finder peptide mapping results. Import multiple peptide `.resultsbpf` archives (or compact PMF ZIPs or original BF CSV exports), retain **each RAW run separately**, filter identified and unidentified components, compare peptide areas, and export tables and figures.
 
@@ -31,7 +31,7 @@ Load one representation **per experiment**. Uploading the corresponding CSV *and
 
 A single experiment can contain many RAW runs (for example, reduced and non-reduced injections). The interface initially infers `Reduced` only when explicitly indicated by filename; set the other preparation labels manually in the editable RAW run table.
 
-## Modules / pages (v0.3.3)
+## Modules / pages (v0.4.0)
 
 - **ID Type filter and displays (v0.3.3)**: Sidebar multiselect `ID Type (per RAW)` defaults to **all** categories and combines with Confidence (%) and Minimum MS Area. Component Explorer shows `id_type` and `id_type_overall`; peptide and multi-sample comparisons show ID Type for every RAW, preserving multiple different types as an explicit list where peptide components are summed. Modifications, relative PTM area fractions, unknown-component summaries and Excel exports retain the corresponding types. Export Report includes an `IDTypeSummary` sheet.
 - **Component Explorer**: all rows start checked; uncheck individual component/RUN records and click **Apply selection** to exclude them from downstream analysis. Selection persists across filters. Select/Deselect All visible controls are provided. Set a minimum `confidence_pct` in the sidebar. A positive threshold excludes missing-confidence/unidentified records.
@@ -48,6 +48,14 @@ A single experiment can contain many RAW runs (for example, reduced and non-redu
 The reference and comparator controls appear in **section 3 (Choose RAW files for peptide comparison)** above the analysis tabs. The first comparison table and the heatmap reflect only those RAW files. If the run's preparation shows `Unspecified`, edit it in **section 1** and click Apply RAW run labels. For peptide comparability, also verify protein identity and digestion/BF analysis method.
 
 For component equivalence between experiments, peptide comparisons use an exact identification key across native PMF and CSV, assuming samples share a compatible protein and BioPharma Finder processing method. **No automated deconvolution, unidentified alignment, automatic response normalization, or modification occupancy interpretation.**
+
+## Sequence Coverage Map — selected peptides ONLY (v0.4.0)
+
+The **Peptide comparison** and **Multi-sample** checkbox areas now have a green rounded border. Under each highlighted table, click **🧬 Mapping · selected peptides** to open a separate modal. **First click Apply peptide selection** after unchecking peptides. The map is built independently for each RAW in the global filter scope, including Reduced and Non-reduced RAWs, using only **applied** component-level and peptide-level selections. An unselected peptide is never reintroduced, even if it was present in the original BF export. An empty selection yields 0% coverage.
+
+The map shows the complete protein/chains, numbered amino acids, color-coded overlapping peptide bars and RT labels, per-chain sequence coverage percentages, selected component peak/area summary, and exports in **PNG / SVG / PDF / CSV / XLSX**. A ZIP can export separate maps/results for multiple filtered RAWs. PMF provides full reference sequences; original CSV can seed reference sequences from positional peptide identifications, but the user must verify inferred sequence completeness. This inferred reference *does not supply* coverage evidence.
+
+**Not Thermo-equivalent**: color thresholds and area shares are explicitly defined MS-signal proxies, not Thermo's recovery or calibrated molar abundance. Molar abundance is left as N/A; no undocumented occupancy/quantitation is guessed. See [complete mapping design, calculations, limitations and Thermo documentation](docs/SEQUENCE_COVERAGE.md).
 
 ## Updating a downloaded ZIP project
 

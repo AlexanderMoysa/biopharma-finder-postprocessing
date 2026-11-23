@@ -31,6 +31,7 @@ from bpf_postprocess.processing.detailed_comparison import (
 from bpf_postprocess.processing.modifications import modification_areas
 from bpf_postprocess.processing.relative_modifications import DEFAULT_PTMS, modification_fractions
 from bpf_postprocess.processing.unidentified import unidentified_summary
+from bpf_postprocess.ui.mapping_dialog import open_mapping_dialog
 from bpf_postprocess.reports.exports import (
     csv_bytes, excel_bytes, static_bar_figure_bytes, heatmap_figure_bytes, simple_bar_figure_bytes,
 )
@@ -38,6 +39,14 @@ from bpf_postprocess.reports.exports import (
 st.set_page_config(page_title="BioPharma Finder Post-processing", layout="wide", page_icon="🧪")
 st.title("BioPharma Finder · Peptide Mapping")
 st.caption("Local analysis · multiple experiments and RAW runs · experimental PMF reader")
+# Stable Streamlit-key CSS classes (not brittle internal DOM selectors).
+st.markdown("""<style>
+.st-key-peptide_comparison_panel, .st-key-multiplesample_comparison_panel {
+    border: 3px solid #28a653 !important;
+    border-radius: 17px !important;
+    padding: 18px 18px 12px 18px !important;
+}
+</style>""", unsafe_allow_html=True)
 
 
 def downloads(table: pd.DataFrame, base: str, *, title: str | None = None) -> None:
@@ -318,6 +327,7 @@ peptide_candidates = peptide_inventory(selected)
 comparison_catalog = run_catalog(selected)
 comparison_reference = None
 comparison_targets = []
+selected_run_ids = []
 comparison_data = selected.iloc[0:0].copy()
 comparison_matrix = pd.DataFrame(columns=["feature"])
 comparison_wide = pd.DataFrame(columns=["feature", "peptide_sequence", "modification", "site", "positions", "protein"])
@@ -395,10 +405,16 @@ with peptide_tab:
              "BF peptide identification. MS areas are summed for duplicate components/charge "
              "states; displayed RT is from the largest-area component per run. "
              "All individual RT, m/z and charge measurements are preserved in the detailed table.")
-    st.write("**Select peptides directly in this table** (all checked initially). "
-             "Selection applies to every RAW and is shared across analysis tabs.")
-    peptide_table_editor(comparison_wide_candidates,"peptide_comparison",height=370)
-    downloads(comparison_wide, "comparison_annotated_matrix", title="Annotated comparison")
+    with st.container(border=True, key="peptide_comparison_panel"):
+        st.write("**Select peptides directly in this table** (all checked initially). "
+                 "Selection applies to every RAW and is shared across analysis tabs.")
+        peptide_table_editor(comparison_wide_candidates,"peptide_comparison",height=370)
+        downloads(comparison_wide, "comparison_annotated_matrix", title="Annotated comparison")
+        st.caption("Mapping reads only the **applied** peptide checkboxes, component selection and "
+                   "filters. Click Apply peptide selection first if you have just changed any checkboxes.")
+        if st.button("🧬 Mapping · selected peptides", key="mapping_open_peptide_comparison",
+                     disabled=comparison_catalog.empty):
+            open_mapping_dialog(analysis_selected, dataset.data, dataset.experiments, comparison_catalog["run"].tolist())
     st.write("**Every individual identified component**, including ID Type (RAW and overall), RT, sequence, "
              "modification, site, confidence, charge, m/z and source run.")
     st.dataframe(comparison_details, width="stretch", hide_index=True, height=320)
@@ -432,10 +448,16 @@ with comparison_tab:
              "Each additional RAW adds its own columns without mixing samples.")
     if comparison_reference is None or not comparison_targets:
         st.info("Select a reference and one or more comparison RAW runs in section 3.")
-    st.write("**Choose peptides to include**; all checked initially. "
-             "Excluded peptides can be rechecked here at any time.")
-    peptide_table_editor(comparison_labeled_candidates,"multi_sample",height=390)
-    downloads(comparison_labeled, "reference_comparison_by_raw", title="RAW-labeled comparison")
+    with st.container(border=True, key="multiplesample_comparison_panel"):
+        st.write("**Choose peptides to include**; all checked initially. "
+                 "Excluded peptides can be rechecked here at any time.")
+        peptide_table_editor(comparison_labeled_candidates,"multi_sample",height=390)
+        downloads(comparison_labeled, "reference_comparison_by_raw", title="RAW-labeled comparison")
+        st.caption("Maps use **only applied selections** and build one protein coverage map "
+                   "per chosen RAW. No unselected peptides contribute.")
+        if st.button("🧬 Mapping · selected peptides", key="mapping_open_multi_sample",
+                     disabled=comparison_catalog.empty):
+            open_mapping_dialog(analysis_selected, dataset.data, dataset.experiments, comparison_catalog["run"].tolist())
     with st.expander("Detailed long-format table (one peptide × comparison RAW)"):
         st.caption("The reference_run and comparison_run columns explicitly identify both files "
                    "for every row; useful for sorting, statistics and software import.")
