@@ -1,6 +1,6 @@
 # BioPharma Finder Post-processing
 
-**Version 0.4.1** — fixes missing BioPharma Finder CSV metadata. Import a matching PMF/.resultsbpf **together with** its original CSV: strict component, identification and signal checks prevent double-counting, preserve precise PMF measurements, and enrich ID Type (`Full` / `MS2` / `NoID`; overall `Both`), Δ ppm, Site, Best ASR, theoretical/average masses, missed cleavages, integration metadata and BF condition fields. The **entire original 43-column CSV** is retained in separate audit sheets and downloads. The selected-only per-RAW Mapping workflow from v0.4.0 is unchanged.
+**Version 0.4.2** — fixes missing BioPharma Finder CSV metadata. Import a matching PMF/.resultsbpf **together with** its original CSV: strict component, identification and signal checks prevent double-counting, preserve precise PMF measurements, and enrich ID Type (`Full` / `MS2` / `NoID`; overall `Both`), Δ ppm, Site, Best ASR, theoretical/average masses, missed cleavages, integration metadata and BF condition fields. The **entire original 43-column CSV** is retained in separate audit sheets and downloads. The selected-only per-RAW Mapping workflow from v0.4.0 is unchanged.
 
 A modular, **local web application** for Thermo BioPharma Finder peptide mapping results. Import multiple peptide `.resultsbpf` archives (or compact PMF ZIPs or original BF CSV exports), retain **each RAW run separately**, filter identified and unidentified components, compare peptide areas, and export tables and figures.
 
@@ -31,7 +31,7 @@ If `py -3.13` is not available, use `python -m venv .venv` instead. The app will
 
 A single experiment can contain many RAW runs (for example, reduced and non-reduced injections). The interface initially infers `Reduced` only when explicitly indicated by filename; set the other preparation labels manually in the editable RAW run table.
 
-## Modules / pages (v0.4.1)
+## Modules / pages (v0.4.2)
 
 - **ID Type filter and displays (v0.3.3)**: Sidebar multiselect `ID Type (per RAW)` defaults to **all** categories and combines with Confidence (%) and Minimum MS Area. Component Explorer shows `id_type` and `id_type_overall`; peptide and multi-sample comparisons show ID Type for every RAW, preserving multiple different types as an explicit list where peptide components are summed. Modifications, relative PTM area fractions, unknown-component summaries and Excel exports retain the corresponding types. Export Report includes an `IDTypeSummary` sheet.
 - **Component Explorer**: shows BF `ID Type` (per RAW and overall), run-specific Δ ppm, Best ASR, theoretical/average mass, missed cleavages, BF ratio/conditions, average area and %CV, integration type and comments when CSV is supplied. All rows start checked; uncheck individual component/RUN records and click **Apply selection** to exclude them from downstream analysis. Selection persists across filters. Select/Deselect All visible controls are provided. Set a minimum `confidence_pct` in the sidebar. A positive threshold excludes missing-confidence/unidentified records.
@@ -108,3 +108,29 @@ This applies to 2, 3, or more RAW runs without mixing reduced and non-reduced
 preparations. The original long-form detailed comparison remains available in
 a collapsible section and both forms are included in Excel/CSV exports.
 Missing peptide signals remain blank (NaN), not assumed to be zero.
+
+## BF-style compact coverage (v0.4.2)
+
+Open **Mapping · selected peptides** and choose **BF-style compact** (default) or
+**Detailed**. Both modes use only the user-applied peptide/component selection
+for the selected RAW; Reduced and Non-reduced injections are never mixed.
+
+- **Compact:** one bar for each chain and contiguous AA interval, with the RT
+  of its highest-area selected identification. Different adducts, modifications
+  and charge states at the same interval are grouped for *display only*.
+  Numeric coverage, peptide counts and areas still use all selected components.
+- **Detailed:** a bar for each separate selected identification as before.
+- **Approximate color proxy:** total MS Area of selected features covering the
+  same (chain,start,end) interval divided by the largest interval area in that
+  same chain. This reproduces several major red/orange/green/blue color classes
+  seen in BF 4197 reduced reference screenshots but is **not** proven to be
+  Thermo's Peptide Recovery. Original BF recovery and molar abundance formulas
+  are unavailable from the supplied frontend assemblies.
+- Both views export PNG/SVG/PDF, plus CSV and Excel (including `BFStyleRegions`).
+  Batch ZIP contains both styles for each chosen RAW.
+
+The supplied `ProteinSequenceMap.htm` describes sequence highlighting, not the
+coverage/recovery computation. `PeptideMapping.Shared.dll` contains map UI names
+and adapters; `PeptideMapping.Algorithm.Parts.dll` includes example coverage
+HTML, but the underlying calculation appears to be invoked through a separate
+service. No Thermo executable code or proprietary templates are included here.

@@ -9,6 +9,7 @@ import streamlit as st
 
 from bpf_postprocess.processing.coverage import ProteinChain, reference_chains, calculate_coverage
 from bpf_postprocess.reports.coverage_map import coverage_figure_bytes, report_tables, mapping_package
+from bpf_postprocess.processing.coverage_display import compact_coverage_segments
 from bpf_postprocess.reports.exports import csv_bytes, excel_bytes
 
 
@@ -107,19 +108,39 @@ def open_mapping_dialog(
                "(a disulfide-linked peak shared across chains is divided equally). "
                "Molar abundance is **not** calculated from MS Area. "
                "Colors denote selected-peptide signal relative to the strongest selected feature in this RAW.")
-    st.image(coverage_figure_bytes(report,'png',residues_per_row),width='stretch')
-    st.markdown("**Peptide segments used in the map**")
+    view_label=st.radio(
+        "Coverage map display",
+        ["BF-style compact (one bar per peptide region)",
+         "Detailed (all selected peptide identifications)"],
+        horizontal=True, key=f"map_view_{epoch}_{run}",
+        help="Both modes use only the applied selections from this RAW. The compact view "
+             "groups modified forms and charge states by the same chain interval for display; "
+             "reported component counts and integrated areas remain unchanged.",
+    )
+    view_mode='compact' if view_label.startswith('BF-style') else 'detailed'
+    if view_mode=='compact':
+        st.caption("BF-style visual layout: one bar per sequence interval, RT from its strongest selected "
+                   "identification; color bins use regional MS Area / strongest region in the same chain. "
+                   "This **approximates**, but does not reproduce, Thermo Peptide Recovery.")
+    st.image(coverage_figure_bytes(report,'png',residues_per_row,view_mode=view_mode),width='stretch')
+    if view_mode=='compact':
+        st.markdown("**Compact peptide regions — one representative per sequence interval**")
+        st.dataframe(compact_coverage_segments(report.segments),width="stretch",hide_index=True,height=220)
+    st.markdown("**All selected peptide segments used for calculation**")
     st.dataframe(report.segments,width="stretch",hide_index=True,height=220)
     image_cols=st.columns(3)
     for col,ext,mime in zip(image_cols,('png','svg','pdf'),('image/png','image/svg+xml','application/pdf')):
         with col:
-            st.download_button(f"⬇ Mapping {ext.upper()}",data=coverage_figure_bytes(report,ext,residues_per_row),
-                               file_name=f"sequence_coverage_{report.raw_file}.{ext}",mime=mime,
-                               key=f'map_{ext}_{epoch}_{run}')
+            st.download_button(f"⬇ Mapping {ext.upper()}",
+                               data=coverage_figure_bytes(report,ext,residues_per_row,view_mode=view_mode),
+                               file_name=f"sequence_coverage_{view_mode}_{report.raw_file}.{ext}",mime=mime,
+                               key=f'map_{ext}_{view_mode}_{epoch}_{run}')
     dl1,dl2=st.columns(2)
     with dl1:
-        st.download_button("⬇ Mapped segments CSV",data=csv_bytes(report.segments),
-                           file_name=f"coverage_segments_{report.raw_file}.csv",mime="text/csv")
+        selected_table=(compact_coverage_segments(report.segments) if view_mode=='compact'
+                        else report.segments)
+        st.download_button("⬇ Visible map regions CSV",data=csv_bytes(selected_table),
+                           file_name=f"coverage_{view_mode}_{report.raw_file}.csv",mime="text/csv")
     with dl2:
         st.download_button("⬇ Complete Mapping Excel",data=excel_bytes(report_tables(report)),
                            file_name=f"sequence_coverage_{report.raw_file}.xlsx",
@@ -134,7 +155,8 @@ def open_mapping_dialog(
         if st.session_state.get("prepared_mapping_signature") != selection_signature:
             st.session_state.pop("prepared_selected_mapping_zip",None)
             st.session_state["prepared_mapping_signature"] = selection_signature
-        st.caption("The ZIP contains one PNG, SVG, PDF, CSV tables and Excel workbook **per filtered RAW**. "
+        st.caption("The ZIP contains **both compact and detailed** PNG, SVG and PDF maps, "
+                   "CSV tables and an Excel workbook per filtered RAW. "
                    "Coverage uses only applied peptide selections and these mapping parameters, "
                    "not all imported peptides.")
         if st.button("Prepare ZIP for selected RAW files",key="prepare_mapping_zip"):
@@ -157,5 +179,7 @@ def open_mapping_dialog(
                                data=st.session_state["prepared_selected_mapping_zip"],
                                file_name="selected_raw_sequence_coverage_maps.zip",mime="application/zip",
                                key="download_mapping_batch_zip")
-    st.caption("Thermo-inspired visualization, not a validated Thermo-equivalent recovery or abundance calculation. "
-               "All displayed peptides were selected and mapped to the explicitly chosen RAW.")
+    st.caption("The BF-style view matches layout and major color classes through an independently "
+               "defined chain-normalized MS-area proxy. It does not claim numerical equivalence "
+               "to Thermo's internal peptide recovery or molar abundance algorithms. "
+               "Only selected peptide components in the chosen RAW are used.")
