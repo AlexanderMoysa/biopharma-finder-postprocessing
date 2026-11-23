@@ -21,6 +21,7 @@ from bpf_postprocess.processing.comparison import compare_runs, long_peptide_are
 from bpf_postprocess.processing.multisample import reference_comparison, replicate_statistics
 from bpf_postprocess.processing.modifications import modification_areas
 from bpf_postprocess.processing.relative_modifications import DEFAULT_PTMS, modification_fractions
+from bpf_postprocess.ui.plots import modification_fraction_figure
 from bpf_postprocess.processing.unidentified import unidentified_summary
 from bpf_postprocess.reports.exports import (
     csv_bytes, excel_bytes, static_bar_figure_bytes, heatmap_figure_bytes, simple_bar_figure_bytes,
@@ -277,10 +278,12 @@ with mod_tab:
                "a missing peptide is not assigned 0% or 100% occupancy.")
     if not fractions.empty:
         ptm_to_plot=st.selectbox("Modification chart",sorted(fractions["modification"].unique()))
-        subset=fractions[fractions["modification"]==ptm_to_plot]
-        st.plotly_chart(px.bar(sub,x="raw_file",y="modified_ms_area_pct",color="backbone",
-                               barmode="group",hover_data=["sample","preparation"],
-                               labels={"modified_ms_area_pct":"Modified MS Area (%)"}),use_container_width=True)
+        fraction_fig=modification_fraction_figure(fractions,ptm_to_plot)
+        if fraction_fig is None:
+            st.info("No quantifiable MS-area percentages for this modification. "
+                    "A matching unmodified peptide may be missing or its denominator may be zero.")
+        else:
+            st.plotly_chart(fraction_fig,use_container_width=True)
 
 with unknown_tab:
     st.write("Unknown components are not identified peptides. Never match unknowns across experiments by component No. alone.")
