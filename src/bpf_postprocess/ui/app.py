@@ -21,7 +21,6 @@ from bpf_postprocess.processing.comparison import compare_runs, long_peptide_are
 from bpf_postprocess.processing.multisample import reference_comparison, replicate_statistics
 from bpf_postprocess.processing.modifications import modification_areas
 from bpf_postprocess.processing.relative_modifications import DEFAULT_PTMS, modification_fractions
-from bpf_postprocess.ui.plots import modification_fraction_figure
 from bpf_postprocess.processing.unidentified import unidentified_summary
 from bpf_postprocess.reports.exports import (
     csv_bytes, excel_bytes, static_bar_figure_bytes, heatmap_figure_bytes, simple_bar_figure_bytes,
@@ -87,7 +86,7 @@ with st.expander("1 · Experiment / RAW run labels", expanded=True):
     st.write("Assign **Sample**, **Group** (e.g. DS, DP, stressed, control), **Preparation** and **Replicate**. "
              "Use the same Sample ID for injections you intend to treat as technical replicates.")
     edited_labels=st.data_editor(
-        st.session_state["run_labels"], hide_index=True, use_container_width=True,
+        st.session_state["run_labels"], hide_index=True, width="stretch",
         disabled=["experiment","raw_file"], key="run_editor",
         column_config={
             "experiment":st.column_config.TextColumn("Experiment"),
@@ -107,7 +106,7 @@ with st.expander("1 · Experiment / RAW run labels", expanded=True):
 raw=dataset.data.drop(columns=["sample","sample_group","preparation","replicate"],errors="ignore").merge(
     edited_labels, on=["experiment","raw_file"], how="left", validate="many_to_one"
 )
-st.dataframe(make_runs(raw),hide_index=True,use_container_width=True)
+st.dataframe(make_runs(raw),hide_index=True,width="stretch")
 with st.expander("Download RAW run overview"):
     downloads(make_runs(raw),"run_overview")
 
@@ -155,7 +154,7 @@ preferred_cols = [
 ]
 selectable=selectable[[c for c in preferred_cols if c in selectable.columns] +
                       [c for c in selectable.columns if c not in preferred_cols]]
-editor=st.data_editor(selectable,hide_index=True,use_container_width=True,height=390,
+editor=st.data_editor(selectable,hide_index=True,width="stretch",height=390,
                       disabled=[c for c in selectable.columns if c!="Selected"],
                       column_config={"Selected":st.column_config.CheckboxColumn("Use in analysis",required=True)},
                       key=f"components_{signature}")
@@ -191,7 +190,7 @@ peptide_tab,comparison_tab,mod_tab,unknown_tab,report_tab=st.tabs([
 with peptide_tab:
     st.write("Integrated MS areas, grouped by full BioPharma Finder identification. "
              "No normalization or occupancy inference; multiple components with the same ID are summed per run.")
-    st.dataframe(matrix,use_container_width=True,hide_index=True,height=320)
+    st.dataframe(matrix,width="stretch",hide_index=True,height=320)
     downloads(matrix,"peptide_comparison",title="Peptide matrix")
     if not areas.empty:
         features=sorted(areas["feature"].dropna().unique().tolist())
@@ -200,7 +199,7 @@ with peptide_tab:
         fig=px.bar(plot_data,x="raw_file",y="ms_area",color="sample",
                    hover_data=["experiment","preparation","component_count"],title=feature,
                    labels={"ms_area":"MS Area","raw_file":"RAW run"})
-        st.plotly_chart(fig,use_container_width=True)
+        st.plotly_chart(fig,width="stretch")
         downloads(plot_data,"selected_peptide_areas")
         st.download_button("⬇ Figure PNG",static_bar_figure_bytes(plot_data,feature,"png"),"peptide_comparison.png","image/png")
         st.download_button("⬇ Figure SVG",static_bar_figure_bytes(plot_data,feature,"svg"),"peptide_comparison.svg","image/svg+xml")
@@ -214,7 +213,7 @@ with comparison_tab:
     if len(columns)>=2:
         ref=st.selectbox("Reference RAW run",columns)
         ref_table=reference_comparison(selected,ref)
-        st.dataframe(ref_table,use_container_width=True,hide_index=True,height=300)
+        st.dataframe(ref_table,width="stretch",hide_index=True,height=300)
         downloads(ref_table,"all_vs_reference",title="All vs reference")
     else:
         st.info("Select at least two RAW runs to compare to one reference.")
@@ -227,7 +226,7 @@ with comparison_tab:
         heat=px.imshow(heatmap_log,aspect="auto",color_continuous_scale="Viridis",
                        labels={"x":"RAW run","y":"Identification","color":"log10(Area+1)"})
         heat.update_layout(height=min(1100,max(350,22*len(heatmap_log))))
-        st.plotly_chart(heat,use_container_width=True)
+        st.plotly_chart(heat,width="stretch")
         st.download_button("⬇ Heatmap HTML",heat.to_html(include_plotlyjs=True).encode("utf-8"),
                            "area_heatmap.html","text/html")
         ha,hb=st.columns(2)
@@ -242,14 +241,14 @@ with comparison_tab:
     group_by=st.radio("Group replicates by",["sample","sample_group"],
                       format_func=lambda x:"Sample ID" if x=="sample" else "Group (DS/DP/stressed/control)",horizontal=True)
     stats=replicate_statistics(selected,by=group_by)
-    st.dataframe(stats,use_container_width=True,hide_index=True,height=300)
+    st.dataframe(stats,width="stretch",hide_index=True,height=300)
     downloads(stats,"replicate_stats",title="Replicate statistics")
     if not areas.empty:
         chosen_feature=st.selectbox("Peptide for grouped comparison",sorted(areas["feature"].unique()),key="group_feature")
         sub=areas[areas["feature"]==chosen_feature]
         groupfig=px.bar(sub,x="sample",y="ms_area",color="preparation",barmode="group",
                         hover_data=["raw_file","experiment"],title=chosen_feature)
-        st.plotly_chart(groupfig,use_container_width=True)
+        st.plotly_chart(groupfig,width="stretch")
         st.download_button("⬇ Grouped plot PNG",simple_bar_figure_bytes(
             sub, "raw_file", "ms_area", "Grouped peptide areas", "png"),
             "grouped_peptide_areas.png", "image/png")
@@ -262,7 +261,7 @@ with mod_tab:
     if selected["source_type"].eq("resultsbpf").any():
         st.warning("PMF modification fields are inferred, not decoded from dedicated PMF metadata. "
                    "Site-specific disulfide assignments require the BF CSV export or further parser validation.")
-    st.dataframe(mods,use_container_width=True,hide_index=True,height=270)
+    st.dataframe(mods,width="stretch",hide_index=True,height=270)
     downloads(mods,"modification_areas",title="Modification areas")
     st.divider()
     st.write("**Relative modified-peptide MS Area (%)** — comparison of selected PTMs against unmodified "
@@ -272,25 +271,48 @@ with mod_tab:
     targets=st.multiselect("PTM labels to include in denominator and show as modified",
                            possible,default=[x for x in DEFAULT_PTMS if x in possible])
     fractions=modification_fractions(selected,targets)
-    st.dataframe(fractions,use_container_width=True,hide_index=True,height=280)
+    st.dataframe(fractions,width="stretch",hide_index=True,height=280)
     downloads(fractions,"relative_modification_ms_area",title="Relative modification")
     st.caption("If no unmodified reference identification exists for a backbone/run, the percentage is blank; "
                "a missing peptide is not assigned 0% or 100% occupancy.")
     if not fractions.empty:
-        ptm_to_plot=st.selectbox("Modification chart",sorted(fractions["modification"].unique()))
-        fraction_fig=modification_fraction_figure(fractions,ptm_to_plot)
-        if fraction_fig is None:
-            st.info("No quantifiable MS-area percentages for this modification. "
-                    "A matching unmodified peptide may be missing or its denominator may be zero.")
+        ptm_to_plot = st.selectbox(
+            "Modification chart", sorted(fractions["modification"].dropna().unique())
+        )
+        # Use the *modification fraction* table here, not the peptide-area
+        # table from the previous tab. Undefined ratios must not become 0%.
+        fraction_plot_data = fractions.loc[
+            fractions["modification"] == ptm_to_plot
+        ].copy()
+        fraction_plot_data["modified_ms_area_pct"] = pd.to_numeric(
+            fraction_plot_data["modified_ms_area_pct"], errors="coerce"
+        )
+        fraction_plot_data = fraction_plot_data.dropna(
+            subset=["modified_ms_area_pct"]
+        )
+        if fraction_plot_data.empty:
+            st.info(
+                "No quantifiable MS-area percentages for this modification. "
+                "The matching unmodified peptide may be absent or its denominator may be zero."
+            )
         else:
-            st.plotly_chart(fraction_fig,use_container_width=True)
+            fig_mod = px.bar(
+                fraction_plot_data,
+                x="raw_file",
+                y="modified_ms_area_pct",
+                color="backbone",
+                barmode="group",
+                hover_data=["sample", "preparation"],
+                labels={"modified_ms_area_pct": "Modified MS Area (%)"},
+            )
+            st.plotly_chart(fig_mod, width="stretch")
 
 with unknown_tab:
     st.write("Unknown components are not identified peptides. Never match unknowns across experiments by component No. alone.")
-    st.dataframe(unknown,use_container_width=True,hide_index=True)
+    st.dataframe(unknown,width="stretch",hide_index=True)
     downloads(unknown,"unidentified_summary",title="Unknown summary")
     unknown_rows=selected[~selected["identified"]].copy()
-    st.dataframe(unknown_rows,use_container_width=True,hide_index=True,height=300)
+    st.dataframe(unknown_rows,width="stretch",hide_index=True,height=300)
     downloads(unknown_rows,"unidentified_components",title="Unknown components")
 
 with report_tab:
