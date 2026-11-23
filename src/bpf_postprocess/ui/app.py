@@ -158,8 +158,12 @@ def unidentified_component_editor(source: pd.DataFrame) -> None:
 with st.expander("Import experiments", expanded="dataset" not in st.session_state):
     uploaded = st.file_uploader("BioPharma Finder CSV, .resultsbpf or compact PMF ZIP",
                                 type=["csv", "resultsbpf", "zip"], accept_multiple_files=True,
-                                help="Choose one input representation per experiment.")
-    st.info("Files are processed on this computer by Streamlit. They are not uploaded to GitHub.")
+                                help="Upload BF CSV alone, PMF/resultsbpf alone, or BOTH matching files for one "
+                                     "experiment. Matching PMF + CSV are validated and enriched without duplicate rows.")
+    st.info("Files are processed locally. For complete BioPharma Finder metadata, upload "
+            "both the matching .resultsbpf (or compact PMF ZIP) and its original CSV. "
+            "The app verifies each component and keeps precise PMF signals plus CSV annotations. "
+            "No files are uploaded to GitHub.")
     if st.button("Import selected files", type="primary", disabled=not uploaded):
         with st.spinner("Reading components and RAW runs..."):
             try:
@@ -192,6 +196,7 @@ if "dataset" not in st.session_state:
     st.stop()
 
 dataset=st.session_state["dataset"]
+source_csv_tables = getattr(dataset, "source_csv_tables", {})
 for warning in dataset.warnings:
     st.warning(warning)
 
@@ -285,8 +290,12 @@ signature=hashlib.sha1((str(st.session_state.get('select_version',0))+"|"+
                          "|".join(component_keys(filtered).tolist())).encode()).hexdigest()[:16]
 preferred_cols = [
     "Selected", "experiment", "sample", "raw_file", "preparation", "component_no",
-    "identified", "id_type", "id_type_overall", "confidence_pct", "peptide_sequence", "modification", "site",
-    "identification", "ms_area", "rt_min", "mz", "charge", "positions", "protein"
+    "identified", "id_type", "id_type_overall", "confidence_pct", "best_asr",
+    "peptide_sequence", "modification", "site", "positions", "protein", "identification",
+    "ms_area", "rt_min", "mz", "charge", "mono_mass_da", "avg_mass_da", "mono_mass_theo_da",
+    "delta_ppm", "missed_cleavages", "integration_type", "bf_ratio_label", "bf_ratio",
+    "bf_max_condition", "bf_min_condition", "bf_max_ms_area", "bf_avg_ms_area_condition",
+    "bf_cv_pct_condition", "comment", "bf_csv_source_file"
 ]
 selectable=selectable[[c for c in preferred_cols if c in selectable.columns] +
                       [c for c in selectable.columns if c not in preferred_cols]]
@@ -315,6 +324,20 @@ st.caption(f"**Applied component selection:** {len(selected):,} of {len(filtered
 with st.expander("Download Component Explorer tables",expanded=True):
     downloads(filtered,"component_explorer_visible",title="Visible components")
     downloads(selected,"component_explorer_selected",title="Selected components")
+
+# Audit view: all columns/rows exactly as originally exported by BioPharma
+# Finder, NOT recalculated from PMF and NOT affected by peptide checkboxes.
+if source_csv_tables:
+    with st.expander("Original BioPharma Finder CSV · all source columns (audit)"):
+        st.caption("Preserves all original BF CSV columns, including condition ratios and %CV. "
+                   "This is the original unfiltered export, not an analytical selection.")
+        source_exp = st.selectbox("Original BF CSV experiment", list(source_csv_tables),
+                                  key="bf_source_table_choice")
+        original_bf = source_csv_tables[source_exp]
+        st.caption(f"Original export: {len(original_bf):,} component rows × "
+                   f"{len(original_bf.columns)} source columns")
+        st.dataframe(original_bf, hide_index=True, width="stretch", height=350)
+        downloads(original_bf, "original_bf_csv_view", title="Original BF CSV")
 
 # Component Explorer selection and peptide-level exclusion are separate.
 # Peptide selection is one shared set across all analysis tabs and RAW runs.
@@ -581,6 +604,8 @@ with report_tab:
     st.dataframe(id_type_summary(analysis_selected), width="stretch", hide_index=True, height=220)
     downloads(id_type_summary(analysis_selected), "id_type_summary", title="ID Type summary")
     st.write("Export selected component data and derived tables as one Excel workbook. "
+             "When CSV exports were uploaded, the workbook also contains all original "
+             "BF source columns in separate experiment-specific audit sheets. "
              "Raw MS files are never included. The analytical sheets contain only selected "
              "peptides and components. **VisibleComponents** and **PeptideSelection** are "
              "audit sheets that deliberately retain excluded rows or their checkbox state "
@@ -599,6 +624,10 @@ with report_tab:
             "ReferenceComparison":comparison_summary,
             "PeptideAreas":comparison_areas,"PeptideMatrix":comparison_matrix,
             "Modifications":mods,"Unidentified":unknown,"Runs":make_runs(analysis_selected)}
+    # Source audit sheets deliberately preserve all raw BF CSV rows/columns,
+    # regardless of active filters/checkboxes. Their names start with BF_ .
+    for bf_experiment, bf_table in source_csv_tables.items():
+        tables[f"BF_{bf_experiment}"] = bf_table
     st.download_button("⬇ Download full Excel report",excel_bytes(tables),
                        file_name="biopharma_postprocessing_report.xlsx",
                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")

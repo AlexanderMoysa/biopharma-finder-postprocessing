@@ -19,7 +19,8 @@ from bpf_postprocess.processing.id_types import combined_id_types, displayed_id_
 
 RUN_ID_COLS = ("experiment", "raw_file")
 ANNOTATION_COLS = ("peptide_sequence", "modification", "site", "positions", "protein")
-RUN_MEASURE_COLS = ("ms_area", "rt_min", "mz", "charge", "mono_mass_da", "confidence_pct", "delta_ppm")
+RUN_MEASURE_COLS = ("ms_area", "rt_min", "mz", "charge", "mono_mass_da", "confidence_pct", "delta_ppm",
+                    "avg_mass_da", "best_asr", "mono_mass_theo_da", "missed_cleavages")
 
 
 def run_id(experiment: str, raw_file: str) -> str:
@@ -116,7 +117,10 @@ def _run_summaries(identified: pd.DataFrame) -> pd.DataFrame:
     are shown from the largest-area component in that run and labeled as such.
     The full-component table is available for other peaks/charge states.
     """
-    cols = ["feature", "run", "ms_area", "component_count", "rt_min", "mz", "charge", "mono_mass_da", "confidence_pct", "delta_ppm", "component_no", "id_type", "id_types"]
+    cols = ["feature", "run", "ms_area", "component_count", "rt_min", "mz", "charge",
+            "mono_mass_da", "confidence_pct", "delta_ppm", "avg_mass_da", "best_asr",
+            "mono_mass_theo_da", "missed_cleavages", "component_no", "id_type", "id_types",
+            "id_type_overall", "integration_type"]
     if identified.empty:
         return pd.DataFrame(columns=cols)
     keys = ["feature", "run"]
@@ -133,7 +137,9 @@ def _run_summaries(identified: pd.DataFrame) -> pd.DataFrame:
     dominant = (identified.sort_values(["ms_area", "component_no"], ascending=[False, True],
                                       na_position="last", kind="stable")
                 .drop_duplicates(keys, keep="first"))
-    dominant_cols = ["rt_min", "mz", "charge", "mono_mass_da", "confidence_pct", "delta_ppm", "component_no", "id_type"]
+    dominant_cols = ["rt_min", "mz", "charge", "mono_mass_da", "confidence_pct", "delta_ppm",
+                     "avg_mass_da", "best_asr", "mono_mass_theo_da", "missed_cleavages",
+                     "component_no", "id_type", "id_type_overall", "integration_type"]
     result = count.merge(dominant[keys + dominant_cols], on=keys, validate="one_to_one")[cols]
     # BioPharma Finder may carry an RT/mz/charge for a component that has a
     # reported area of zero in this injection. Such values are retained in
@@ -141,7 +147,7 @@ def _run_summaries(identified: pd.DataFrame) -> pd.DataFrame:
     # in the aggregated comparison table.
     no_detectable_signal = result["ms_area"].isna() | (result["ms_area"] <= 0)
     if no_detectable_signal.any():
-        for measure in ("rt_min", "mz", "charge", "mono_mass_da", "confidence_pct", "delta_ppm"):
+        for measure in ("rt_min", "mz", "charge", "mono_mass_da", "confidence_pct", "delta_ppm", "avg_mass_da", "best_asr"):
             result.loc[no_detectable_signal, measure] = float("nan")
     return result
 
@@ -193,11 +199,23 @@ def annotated_area_matrix(frame: pd.DataFrame, reference: str, comparisons: Sequ
         return metadata
     obs = _run_summaries(identified)
     for name in [reference, *comparisons]:
-        current = obs.loc[obs["run"] == name, ["feature", "ms_area", "rt_min", "component_count", "id_types"]].rename(
-            columns={"ms_area": f"MS Area | {name}",
-                     "rt_min": f"RT dominant (min) | {name}",
-                     "component_count": f"Components | {name}",
-                     "id_types": f"ID Type | {name}"})
+        current = obs.loc[obs["run"] == name, [
+            "feature", "ms_area", "rt_min", "component_count", "id_types", "delta_ppm",
+            "best_asr", "avg_mass_da", "mono_mass_theo_da", "missed_cleavages",
+            "id_type_overall", "integration_type"
+        ]].rename(columns={
+            "ms_area": f"MS Area | {name}",
+            "rt_min": f"RT dominant (min) | {name}",
+            "component_count": f"Components | {name}",
+            "id_types": f"ID Type | {name}",
+            "delta_ppm": f"Delta ppm dominant | {name}",
+            "best_asr": f"Best ASR dominant | {name}",
+            "avg_mass_da": f"Avg mass exp. dominant (Da) | {name}",
+            "mono_mass_theo_da": f"Mono mass theo. dominant (Da) | {name}",
+            "missed_cleavages": f"Missed cleavages dominant | {name}",
+            "id_type_overall": f"ID Type overall (BF) | {name}",
+            "integration_type": f"Integration Type | {name}",
+        })
         metadata = metadata.merge(current, on="feature", how="left", validate="one_to_one")
     return metadata.sort_values("feature").reset_index(drop=True)
 
@@ -213,8 +231,9 @@ def detailed_component_records(frame: pd.DataFrame, reference: str, comparisons:
         return identified
     identified["role"] = identified["run"].eq(reference).map({True: "Reference", False: "Comparison"})
     front = ["role", "run", "experiment", "sample", "sample_group", "raw_file", "preparation", "component_no", "id_type", "id_type_overall",
-             "peptide_sequence", "modification", "site", "positions", "protein", "identification", "confidence_pct",
-             "rt_min", "mz", "charge", "mono_mass_da", "delta_ppm", "ms_area"]
+             "peptide_sequence", "modification", "site", "positions", "protein", "identification", "confidence_pct", "delta_ppm",
+             "rt_min", "mz", "charge", "mono_mass_da", "avg_mass_da", "mono_mass_theo_da",
+             "best_asr", "missed_cleavages", "ms_area"]
     return identified[[c for c in front if c in identified] + [c for c in identified if c not in front]].sort_values(
         ["run", "identification", "component_no"], kind="stable").reset_index(drop=True)
 
@@ -238,6 +257,13 @@ def run_labeled_reference_matrix(frame: pd.DataFrame, reference: str, comparison
         f"RT dominant (min) | {reference}": f"RT dominant (min) | {reference} [REFERENCE]",
         f"Components | {reference}": f"Components | {reference} [REFERENCE]",
         f"ID Type | {reference}": f"ID Type | {reference} [REFERENCE]",
+        f"Delta ppm dominant | {reference}": f"Delta ppm dominant | {reference} [REFERENCE]",
+        f"Best ASR dominant | {reference}": f"Best ASR dominant | {reference} [REFERENCE]",
+        f"Avg mass exp. dominant (Da) | {reference}": f"Avg mass exp. dominant (Da) | {reference} [REFERENCE]",
+        f"Mono mass theo. dominant (Da) | {reference}": f"Mono mass theo. dominant (Da) | {reference} [REFERENCE]",
+        f"Missed cleavages dominant | {reference}": f"Missed cleavages dominant | {reference} [REFERENCE]",
+        f"ID Type overall (BF) | {reference}": f"ID Type overall (BF) | {reference} [REFERENCE]",
+        f"Integration Type | {reference}": f"Integration Type | {reference} [REFERENCE]",
     }
     matrix = matrix.rename(columns=reference_columns)
     ordering = [*base, *reference_columns.values()]
@@ -251,6 +277,13 @@ def run_labeled_reference_matrix(frame: pd.DataFrame, reference: str, comparison
             f"RT dominant (min) | {comparator}",
             f"Components | {comparator}",
             f"ID Type | {comparator}",
+            f"Delta ppm dominant | {comparator}",
+            f"Best ASR dominant | {comparator}",
+            f"Avg mass exp. dominant (Da) | {comparator}",
+            f"Mono mass theo. dominant (Da) | {comparator}",
+            f"Missed cleavages dominant | {comparator}",
+            f"ID Type overall (BF) | {comparator}",
+            f"Integration Type | {comparator}",
         ])
         suffix = f"{comparator} vs {reference}"
         names = {

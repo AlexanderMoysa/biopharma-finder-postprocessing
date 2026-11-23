@@ -3,7 +3,7 @@
 Do not use Component No. as a cross-experiment identification key.
 """
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 import pandas as pd
 
@@ -13,9 +13,18 @@ COLS = [
     "peptide_sequence", "modification", "site", "positions", "protein",
     "rt_min", "mz", "charge", "mono_mass_da", "ms_area",
     "confidence_pct", "delta_ppm", "id_type", "id_type_overall", "integration_type",
+    "level", "best_asr", "avg_mass_da", "mono_mass_theo_da", "missed_cleavages",
+    "bf_ratio_label", "bf_ratio", "bf_max_condition", "bf_min_condition",
+    "bf_max_ms_area", "bf_avg_ms_area_condition", "bf_cv_pct_condition", "comment",
+    "delta_ppm_overall", "bf_csv_source_file",
     "source_file", "source_type", "annotation_origin", "import_note",
 ]
-NUMERIC_COLS = ["component_no", "rt_min", "mz", "charge", "mono_mass_da", "ms_area", "confidence_pct", "delta_ppm"]
+NUMERIC_COLS = [
+    "component_no", "rt_min", "mz", "charge", "mono_mass_da", "ms_area",
+    "confidence_pct", "delta_ppm", "delta_ppm_overall", "best_asr", "avg_mass_da",
+    "mono_mass_theo_da", "missed_cleavages", "bf_ratio", "bf_max_ms_area",
+    "bf_avg_ms_area_condition", "bf_cv_pct_condition",
+]
 
 @dataclass
 class ImportResult:
@@ -23,6 +32,7 @@ class ImportResult:
     experiments: pd.DataFrame
     runs: pd.DataFrame
     warnings: list[str]
+    source_csv_tables: dict[str, pd.DataFrame] = field(default_factory=dict)
 
 
 def as_table(records: list[dict] | pd.DataFrame) -> pd.DataFrame:
@@ -30,7 +40,8 @@ def as_table(records: list[dict] | pd.DataFrame) -> pd.DataFrame:
     for col in NUMERIC_COLS:
         table[col] = pd.to_numeric(table[col], errors="coerce")
     table["identified"] = table["identified"].fillna(False).astype(bool)
-    for col in ("identification", "peptide_sequence", "modification", "site", "positions", "protein", "id_type", "id_type_overall"):
+    for col in ("identification", "peptide_sequence", "modification", "site", "positions", "protein", "id_type", "id_type_overall", "level", "bf_ratio_label",
+                "bf_max_condition", "bf_min_condition", "comment", "bf_csv_source_file"):
         table[col] = table[col].fillna("").astype(str)
     return table
 
